@@ -1,0 +1,140 @@
+Actual_Fault,Model_Prediction,Match
+F-06a Battery Aging Trend,F-06b Thermal Risk,False
+F-04 Load Oscillation,F-04 Load Oscillation,True
+Normal Status,Normal Status,True
+Normal Status,Normal Status,True
+Normal Status,Normal Status,True
+Normal Status,Normal Status,True
+F-04 Load Oscillation,Normal Status,False
+Normal Status,Normal Status,True
+F-04 Load Oscillation,Normal Status,False
+Normal Status,Normal Status,True
+F-04 Load Oscillation,F-06a Battery Aging Trend,False
+F-04 Load Oscillation,Normal Status,False
+F-04 Load Oscillation,Normal Status,False
+F-03 PV Issue,F-03 PV Issue,True
+F-04 Load Oscillation,Normal Status,False
+Normal Status,Normal Status,True
+F-03 PV Issue,F-03 PV Issue,True
+F-04 Load Oscillation,F-06a Battery Aging Trend,False
+F-04 Load Oscillation,Normal Status,False
+Normal Status,Normal Status,True
+Normal Status,Normal Status,True
+Normal Status,Normal Status,True
+Normal Status,Normal Status,True
+F-04 Load Oscillation,F-06a Battery Aging Trend,False
+F-04 Load Oscillation,Normal Status,False
+F-04 Load Oscillation,Normal Status,False
+F-02 Low SoC (Weather),F-03 PV Issue,False
+Normal Status,Normal Status,True
+F-03 PV Issue,F-06a Battery Aging Trend,False
+Normal Status,Normal Status,True
+Normal Status,Normal Status,True
+F-04 Load Oscillation,Normal Status,False
+F-04 Load Oscillation,F-04 Load Oscillation,True
+Normal Status,Normal Status,True
+Normal Status,Normal Status,True
+Normal Status,Normal Status,True
+Normal Status,Normal Status,True
+Normal Status,Normal Status,True
+F-04 Load Oscillation,Normal Status,False
+F-04 Load Oscillation,F-04 Load Oscillation,True
+F-04 Load Oscillation,Normal Status,False
+F-04 Load Oscillation,Normal Status,False
+F-04 Load Oscillation,Normal Status,False
+F-04 Load Oscillation,F-04 Load Oscillation,True
+F-04 Load Oscillation,F-04 Load Oscillation,True
+F-06a Battery Aging Trend,F-01 Controller Bug,False
+Normal Status,Normal Status,True
+F-03 PV Issue,F-01 Controller Bug,False
+F-03 PV Issue,F-01 Controller Bug,False
+Normal Status,Normal Status,True
+F-06a Battery Aging Trend,Normal Status,False
+Normal Status,Normal Status,True
+Normal Status,Normal Status,True
+F-06a Battery Aging Trend,Normal Status,False
+Normal Status,Normal Status,True
+Normal Status,Normal Status,True
+F-04 Load Oscillation,Normal Status,False
+F-06a Battery Aging Trend,Normal Status,False
+F-06a Battery Aging Trend,Normal Status,False
+Normal Status,Normal Status,True
+Normal Status,Normal Status,True
+F-06a Battery Aging Trend,Normal Status,False
+F-06a Battery Aging Trend,Normal Status,False
+F-04 Load Oscillation,Normal Status,False
+F-06b Thermal Risk,F-06b Thermal Risk,True
+F-06a Battery Aging Trend,Normal Status,False
+Normal Status,Normal Status,True
+Normal Status,Normal Status,True
+Normal Status,Normal Status,True
+Normal Status,Normal Status,True
+F-04 Load Oscillation,Normal Status,False
+Normal Status,Normal Status,True
+Normal Status,Normal Status,True
+Normal Status,Normal Status,True
+F-04 Load Oscillation,Normal Status,False
+F-06a Battery Aging Trend,F-05 Total Power Loss,False
+F-06a Battery Aging Trend,Normal Status,False
+Normal Status,Normal Status,True
+F-06a Battery Aging Trend,Normal Status,False
+F-06a Battery Aging Trend,Normal Status,False
+F-06a Battery Aging Trend,Normal Status,False
+Normal Status,Normal Status,True
+F-06a Battery Aging Trend,Normal Status,False
+Normal Status,Normal Status,True
+Normal Status,Normal Status,True
+F-06a Battery Aging Trend,Normal Status,False
+F-06b Thermal Risk,F-06b Thermal Risk,True
+F-06a Battery Aging Trend,F-06a Battery Aging Trend,True
+F-06a Battery Aging Trend,Normal Status,False
+Normal Status,Normal Status,True
+Normal Status,Normal Status,True
+Normal Status,Normal Status,True
+Normal Status,Normal Status,True
+Normal Status,Normal Status,True
+F-06a Battery Aging Trend,Normal Status,False
+F-04 Load Oscillation,Normal Status,False
+F-06a Battery Aging Trend,Normal Status,False
+F-04 Load Oscillation,F-04 Load Oscillation,True
+F-06a Battery Aging Trend,Normal Status,False
+F-06a Battery Aging Trend,Normal Status,False
+F-04 Load Oscillation,Normal Status,False
+F-04 Load Oscillation,Normal Status,False
+Normal Status,Normal Status,True
+F-04 Load Oscillation,F-06a Battery Aging Trend,False
+F-06a Battery Aging Trend,Normal Status,False
+F-06a Battery Aging Trend,Normal Status,False
+F-04 Load Oscillation,Normal Status,False
+F-06a Battery Aging Trend,Normal Status,False
+F-06a Battery Aging Trend,Normal Status,False
+F-06a Battery Aging Trend,Normal Status,False
+F-06a Battery Aging Trend,Normal Status,False
+F-04 Load Oscillation,Normal Status,False
+F-04 Load Oscillation,F-06a Battery Aging Trend,False
+F-04 Load Oscillation,Normal Status,False
+F-04 Load Oscillation,Normal Status,False
+F-05 Total Power Loss,F-05 Total Power Loss,True
+Normal Status,Normal Status,True
+F-06a Battery Aging Trend,Normal Status,False
+F-06a Battery Aging Trend,F-06a Battery Aging Trend,True
+F-04 Load Oscillation,Normal Status,False
+F-04 Load Oscillation,Normal Status,False
+F-04 Load Oscillation,Normal Status,False
+Normal Status,Normal Status,True
+F-06a Battery Aging Trend,Normal Status,False
+F-04 Load Oscillation,Normal Status,False
+F-06a Battery Aging Trend,Normal Status,False
+Normal Status,Normal Status,True
+Normal Status,Normal Status,True
+Normal Status,Normal Status,True
+Normal Status,Normal Status,True
+F-04 Load Oscillation,Normal Status,False
+F-06a Battery Aging Trend,F-06b Thermal Risk,False
+Normal Status,Normal Status,True
+F-06a Battery Aging Trend,Normal Status,False
+F-04 Load Oscillation,Normal Status,False
+F-06a Battery Aging Trend,Normal Status,False
+F-04 Load Oscillation,Normal Status,False
+F-04 Load Oscillation,Normal Status,False
+Normal Status,Normal Status,True
