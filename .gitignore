@@ -1,0 +1,38 @@
+# Python Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python Cache and Compiles
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+
+# IDE / Editor Settings
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# OS Metadata
+Thumbs.db
+db.db
+desktop.ini
+
+# Large Telemetry datasets / Generated outputs
+resource/GenData_Samples.csv
+*.log
+*.zip
+*.json
+
+# Model files (uncomment if you wish to exclude weights from Git history)
+# PipeLine/models/*.pth
+# PipeLine/models/*.pkl
+# models/

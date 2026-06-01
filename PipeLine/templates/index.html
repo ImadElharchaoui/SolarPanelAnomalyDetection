@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solar Street Light — Anomaly Detection Pipeline</title>
+    
+    <!-- Premium Fonts & Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #0b0c16 0%, #151728 50%, #0d0f1b 100%);
+            --glass-bg: rgba(21, 23, 42, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.07);
+            --accent-purple: #9d4edd;
+            --accent-blue: #3a86c8;
+            --text-main: #f8f9fa;
+            --text-muted: #a0aec0;
+            
+            /* Status Colors */
+            --color-normal: #10b981;
+            --color-warning: #f59e0b;
+            --color-danger: #ef4444;
+            --color-info: #3b82f6;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: var(--bg-gradient);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* Glassmorphic Navbar */
+        header {
+            background: rgba(11, 12, 22, 0.6);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--glass-border);
+            padding: 1.2rem 2.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.4rem;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            background: linear-gradient(90deg, #a78bfa, #60a5fa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .logo i {
+            background: linear-gradient(135deg, #a78bfa, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .nav-links a {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: var(--text-main);
+        }
+
+        main {
+            flex: 1;
+            padding: 2.5rem;
+            max-width: 1400px;
+            width: 100%;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 2.5rem;
+        }
+
+        /* Glass Card Container */
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 18px;
+            padding: 2.5rem;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        /* Hero / Upload Section */
+        .upload-section {
+            text-align: center;
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .upload-section h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-bottom: 0.8rem;
+            background: linear-gradient(120deg, #ffffff 30%, #cbd5e1 90%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .upload-section p {
+            color: var(--text-muted);
+            font-size: 1.05rem;
+            margin-bottom: 2rem;
+        }
+
+        .drop-zone {
+            border: 2px dashed rgba(167, 139, 250, 0.4);
+            border-radius: 14px;
+            padding: 3rem 2rem;
+            background: rgba(167, 139, 250, 0.02);
+            cursor: pointer;
+            transition: border-color 0.3s, background-color 0.3s, transform 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.2rem;
+            position: relative;
+        }
+
+        .drop-zone:hover, .drop-zone.dragover {
+            border-color: var(--accent-purple);
+            background: rgba(167, 139, 250, 0.06);
+            transform: scale(1.01);
+        }
+
+        .drop-zone i {
+            font-size: 3.2rem;
+            color: #a78bfa;
+            transition: transform 0.3s;
+        }
+
+        .drop-zone:hover i {
+            transform: translateY(-5px);
+        }
+
+        .drop-zone input {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .file-info {
+            font-weight: 500;
+            color: var(--text-main);
+        }
+
+        .btn-predict {
+            background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
+            border: none;
+            color: white;
+            padding: 0.9rem 2.2rem;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(157, 78, 221, 0.35);
+            transition: opacity 0.3s, transform 0.2s, box-shadow 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.8rem;
+            margin-top: 1.5rem;
+        }
+
+        .btn-predict:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(157, 78, 221, 0.5);
+        }
+
+        .btn-predict:active {
+            transform: translateY(0);
+        }
+
+        .btn-predict:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Loading Spinner */
+        .spinner {
+            display: none;
+            width: 22px;
+            height: 22px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Dashboard Results Grid */
+        .results-container {
+            display: none; /* Initially hidden */
+            flex-direction: column;
+            gap: 2rem;
+            animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--glass-border);
+            padding-bottom: 1.2rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .dashboard-title h2 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.6rem;
+            font-weight: 700;
+        }
+
+        .dashboard-title p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-top: 0.2rem;
+        }
+
+        /* Overview Panel */
+        .overview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .overview-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1.2rem;
+        }
+
+        .overview-icon {
+            width: 54px;
+            height: 54px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.6rem;
+        }
+
+        .overview-card.prediction .overview-icon {
+            background: rgba(167, 139, 250, 0.15);
+            color: #c084fc;
+        }
+
+        .overview-card.confidence .overview-icon {
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+        }
+
+        .overview-card.days .overview-icon {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+        }
+
+        .overview-val {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.4rem;
+            font-weight: 700;
+            margin-top: 0.2rem;
+        }
+
+        .overview-label {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Main Dashboard Content Layout */
+        .dashboard-body {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 2rem;
+        }
+
+        @media (max-width: 1024px) {
+            .dashboard-body {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Anomaly Probability Progress Bars */
+        .prob-bar-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1.1rem;
+        }
+
+        .prob-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .prob-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .prob-label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .prob-track {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .prob-fill {
+            height: 100%;
+            border-radius: 4px;
+            width: 0%;
+            transition: width 1s cubic-bezier(0.1, 1, 0.1, 1);
+        }
+
+        /* Charts Container */
+        .chart-box {
+            background: rgba(255, 255, 255, 0.01);
+            border: 1px solid var(--glass-border);
+            border-radius: 14px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .chart-box h3 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            color: #e2e8f0;
+        }
+
+        .chart-wrapper {
+            position: relative;
+            height: 320px;
+            width: 100%;
+        }
+
+        /* Diagnosis Info Card */
+        .diagnosis-card {
+            background: rgba(157, 78, 221, 0.05);
+            border: 1px solid rgba(157, 78, 221, 0.2);
+            border-radius: 12px;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+        }
+
+        .diagnosis-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        .diagnosis-text {
+            font-size: 0.92rem;
+            line-height: 1.5;
+            color: #cbd5e1;
+        }
+
+        .diagnosis-action {
+            font-size: 0.92rem;
+            font-weight: 600;
+            color: #a78bfa;
+            border-top: 1px solid rgba(255,255,255,0.06);
+            padding-top: 0.8rem;
+            margin-top: 0.3rem;
+        }
+
+        /* Table Design */
+        .table-section {
+            overflow-x: auto;
+        }
+
+        .table-section h3 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.88rem;
+            text-align: left;
+        }
+
+        th {
+            background: rgba(255, 255, 255, 0.03);
+            font-weight: 600;
+            color: #cbd5e1;
+            padding: 1rem;
+            border-bottom: 2px solid var(--glass-border);
+        }
+
+        td {
+            padding: 0.9rem 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            color: #cbd5e1;
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        /* Badge design */
+        .badge {
+            padding: 0.3rem 0.7rem;
+            border-radius: 30px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        .badge-success { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .badge-warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+        .badge-danger { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            border-top: 1px solid var(--glass-border);
+            margin-top: auto;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo">
+            <i class="fa-solid fa-chart-line"></i>
+            <span>Solar anomaly detection pipeline</span>
+        </div>
+        <div class="nav-links">
+            <a href="https://github.com" target="_blank"><i class="fa-brands fa-github"></i> Source</a>
+        </div>
+    </header>
+
+    <main>
+        <!-- Upload Section -->
+        <section class="glass-card upload-section">
+            <h1>Upload Street Light Log Data</h1>
+            <p>Upload a <code>.log</code> or <code>.json</code> file representing datalogger raw outputs to parse and predict battery or PV anomalies.</p>
+            
+            <div class="drop-zone" id="drop-zone">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+                <div class="file-info" id="file-info">Drag and drop your file here, or click to browse</div>
+                <div style="font-size: 0.85rem; color: var(--text-muted);">Supports .log, .json</div>
+                <input type="file" id="file-input" accept=".log,.json">
+            </div>
+
+            <button class="btn-predict" id="btn-predict" disabled>
+                <div class="spinner" id="spinner"></div>
+                <i class="fa-solid fa-bolt" id="btn-icon"></i>
+                <span id="btn-text">Run Pipeline Analysis</span>
+            </button>
+        </section>
+
+        <!-- Dashboard Results -->
+        <section class="glass-card results-container" id="results-container">
+            <div class="dashboard-header">
+                <div class="dashboard-title">
+                    <h2 id="result-logger-name">Datalogger Diagnosis</h2>
+                    <p>Processed sequence of telemetry metrics using LSTM Neural Network model.</p>
+                </div>
+                <div id="result-badge-container">
+                    <!-- Dynamic Badge -->
+                </div>
+            </div>
+
+            <!-- Overview Metrics Row -->
+            <div class="overview-grid">
+                <div class="overview-card prediction">
+                    <div class="overview-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                    <div>
+                        <div class="overview-label">Primary Verdict</div>
+                        <div class="overview-val" id="val-prediction">Normal</div>
+                    </div>
+                </div>
+                <div class="overview-card confidence">
+                    <div class="overview-icon"><i class="fa-solid fa-circle-check"></i></div>
+                    <div>
+                        <div class="overview-label">Model Confidence</div>
+                        <div class="overview-val" id="val-confidence">0.0%</div>
+                    </div>
+                </div>
+                <div class="overview-card days">
+                    <div class="overview-icon"><i class="fa-solid fa-calendar-days"></i></div>
+                    <div>
+                        <div class="overview-label">Total Days Logged</div>
+                        <div class="overview-val" id="val-days">0 Days</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dashboard Body -->
+            <div class="dashboard-body">
+                <!-- Left: Charts & Trends -->
+                <div>
+                    <!-- Probability Timeline -->
+                    <div class="chart-box">
+                        <h3><i class="fa-solid fa-chart-area"></i> Anomaly Probability Evolution</h3>
+                        <div class="chart-wrapper">
+                            <canvas id="probChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Telemetry Sensors -->
+                    <div class="chart-box">
+                        <h3><i class="fa-solid fa-solar-panel"></i> Key Telemetry Trends</h3>
+                        <div class="chart-wrapper">
+                            <canvas id="telemetryChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Probability List & Diagnosis -->
+                <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                    <div class="chart-box" style="margin-bottom: 0;">
+                        <h3 style="margin-bottom: 1.5rem;"><i class="fa-solid fa-list-check"></i> Class Probabilities</h3>
+                        <div class="prob-bar-container" id="prob-bar-list">
+                            <!-- Dynamic Bars -->
+                        </div>
+                    </div>
+
+                    <div class="diagnosis-card" id="diagnosis-card">
+                        <div class="diagnosis-title" id="diagnosis-title">
+                            <i class="fa-solid fa-circle-info"></i> Normal Status
+                        </div>
+                        <div class="diagnosis-text" id="diagnosis-text">
+                            The street light battery, PV module, and charge controller are all displaying normal telemetry parameters. No maintenance is required.
+                        </div>
+                        <div class="diagnosis-action" id="diagnosis-action">
+                            Recommended: Regular scheduled inspections.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Daily Telemetry Table -->
+            <div class="table-section">
+                <h3><i class="fa-solid fa-database"></i> Parsed Daily Logs</h3>
+                <div style="max-height: 400px; overflow-y: auto; border: 1px solid var(--glass-border); border-radius: 8px;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Day</th>
+                                <th>Min Battery (V)</th>
+                                <th>Max Battery (V)</th>
+                                <th>Charge (Ah)</th>
+                                <th>Load (Ah)</th>
+                                <th>Max PV (V)</th>
+                                <th>Max PV Current (A)</th>
+                                <th>SoC (%)</th>
+                                <th>Max Temp (°C)</th>
+                                <th>Min Temp (°C)</th>
+                                <th>Night Duration (m)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body">
+                            <!-- Dynamic Table Rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2026 Solar Street Light Anomaly Detection System. Running in offline evaluation mode.</p>
+    </footer>
+
+    <script>
+        const fileInput = document.getElementById('file-input');
+        const fileInfo = document.getElementById('file-info');
+        const dropZone = document.getElementById('drop-zone');
+        const btnPredict = document.getElementById('btn-predict');
+        const spinner = document.getElementById('spinner');
+        const btnIcon = document.getElementById('btn-icon');
+        const btnText = document.getElementById('btn-text');
+        const resultsContainer = document.getElementById('results-container');
+
+        let selectedFile = null;
+        let probabilityChartInstance = null;
+        let telemetryChartInstance = null;
+
+        // Anomaly descriptions metadata
+        const anomalyMetadata = {
+            'Normal Status': {
+                icon: 'fa-circle-check',
+                color: 'var(--color-normal)',
+                badge: 'badge-success',
+                title: 'Normal Status',
+                text: 'The solar battery, PV module, and controller are displaying healthy and nominal telemetry channels. Expected charge cycles, SoC progression, and battery voltages are consistent.',
+                action: 'Recommended Action: No current actions required. Continue routine telemetry checks.'
+            },
+            'F-01 Controller Bug': {
+                icon: 'fa-bug',
+                color: 'var(--color-danger)',
+                badge: 'badge-danger',
+                title: 'F-01 Controller Bug Upon Depletion',
+                text: 'The charge controller fails to resume charging on day window after a deep battery discharge occurs, leaving the battery SoC flat at minimum levels despite high Solar PV voltage being present.',
+                action: 'Recommended Action: Perform a physical power cycle reset on the controller or update firmware.'
+            },
+            'F-02 Low SoC (Weather)': {
+                icon: 'fa-cloud-showers-heavy',
+                color: 'var(--color-warning)',
+                badge: 'badge-warning',
+                title: 'F-02 Low SoC (Weather Conditions)',
+                text: 'Low solar charging energy due to heavy cloud cover or continuous overcast/rainy weather. The system remains functioning but the battery SoC has dropped below 30% for consecutive days.',
+                action: 'Recommended Action: System is designed to auto-recover when sunlight improves. Keep loads low if possible.'
+            },
+            'F-03 PV Issue': {
+                icon: 'fa-plug-circle-xmark',
+                color: 'var(--color-danger)',
+                badge: 'badge-danger',
+                title: 'F-03 PV Module / Wiring Issue',
+                text: 'Low charge currents and low SoC peaks detected on warm days, indicating a physical issue (dust cover, shadowing, module damage, or loose solar input wires) rather than bad weather.',
+                action: 'Recommended Action: Send field technician to clean panel, inspect PV angle, and test junction connections.'
+            },
+            'F-04 Load Oscillation': {
+                icon: 'fa-wave-square',
+                color: 'var(--color-warning)',
+                badge: 'badge-warning',
+                title: 'F-04 LED Blinking / Load Oscillation',
+                text: 'Extremely flat nighttime battery discharge combined with continuous high load triggers. Indicates high-frequency blinking of the LED load drawing abnormal current cycles.',
+                action: 'Recommended Action: Verify the LED driver settings and inspect the light controller load terminals.'
+            },
+            'F-05 Total Power Loss': {
+                icon: 'fa-power-off',
+                color: 'var(--color-danger)',
+                badge: 'badge-danger',
+                title: 'F-05 Burnt Fuse / Total Power Loss',
+                text: 'Telemetry has returned flat zero values for all battery voltage, PV charging current, and SoC indicators for 24h or more. Strongly suggests a blown battery fuse or disconnected main power line.',
+                action: 'Recommended Action: Inspect and replace the battery fuse. Check battery terminal wiring.'
+            },
+            'F-06a Battery Aging Trend': {
+                icon: 'fa-battery-quarter',
+                color: 'var(--color-warning)',
+                badge: 'badge-warning',
+                title: 'F-06a Battery EOL Accelerated Degradation',
+                text: 'Trend analysis indicates a progressive decline in peak daily SoC combined with an increasing discharge rate at night. The battery capacity is severely reduced.',
+                action: 'Recommended Action: Schedule a battery replacement as capacity degradation has crossed threshold limits.'
+            },
+            'F-06b Thermal Risk': {
+                icon: 'fa-temperature-high',
+                color: 'var(--color-danger)',
+                badge: 'badge-danger',
+                title: 'F-06b Battery Thermal Runaway Risk',
+                text: 'Battery temperature has exceeded 45°C during the active charging phase, while charge current displays an anomalous sudden drop. High risk of cell swelling or runaway.',
+                action: 'Recommended Action: URGENT. Shut down charging systems immediately. Inspect cooling system or battery cells.'
+            }
+        };
+
+        function getAnomalyShortName(fullName) {
+            for (const key in anomalyMetadata) {
+                if (fullName.includes(key)) return key;
+            }
+            return 'Normal Status';
+        }
+
+        // Drag and drop handlers
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                dropZone.classList.add('dragover');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('dragover');
+            }, false);
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            if (files.length) handleFile(files[0]);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (fileInput.files.length) handleFile(fileInput.files[0]);
+        });
+
+        function handleFile(file) {
+            selectedFile = file;
+            fileInfo.innerHTML = `<strong>Selected:</strong> ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+            btnPredict.removeAttribute('disabled');
+        }
+
+        // Trigger Analysis
+        btnPredict.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            // Set loading state
+            btnPredict.setAttribute('disabled', true);
+            spinner.style.display = 'block';
+            btnIcon.style.display = 'none';
+            btnText.textContent = 'Processing File...';
+            resultsContainer.style.display = 'none';
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (!response.ok || data.error) {
+                    alert(data.error || 'Failed to process pipeline.');
+                    return;
+                }
+
+                // Render Results
+                renderDashboard(data.results[0]);
+            } catch (err) {
+                console.error(err);
+                alert('Connection error. Is the server running?');
+            } finally {
+                btnPredict.removeAttribute('disabled');
+                spinner.style.display = 'none';
+                btnIcon.style.display = 'block';
+                btnText.textContent = 'Run Pipeline Analysis';
+            }
+        });
+
+        function renderDashboard(result) {
+            resultsContainer.style.display = 'flex';
+            
+            // Set primary verdict values
+            const rawPrediction = result.final_prediction;
+            const shortPrediction = getAnomalyShortName(rawPrediction);
+            const confPercent = (result.confidence * 100).toFixed(1) + '%';
+            const daysCount = result.raw_data.length;
+
+            document.getElementById('val-prediction').textContent = shortPrediction;
+            document.getElementById('val-confidence').textContent = confPercent;
+            document.getElementById('val-days').textContent = daysCount + ' Days';
+            document.getElementById('result-logger-name').textContent = result.sample_id;
+
+            // Render Badge & Info Box
+            const meta = anomalyMetadata[shortPrediction] || anomalyMetadata['Normal Status'];
+            
+            const badgeContainer = document.getElementById('result-badge-container');
+            badgeContainer.innerHTML = `<span class="badge ${meta.badge}"><i class="fa-solid ${meta.icon}"></i> ${rawPrediction}</span>`;
+
+            const diagCard = document.getElementById('diagnosis-card');
+            diagCard.style.borderColor = meta.color;
+            diagCard.style.background = `rgba(${parseInt(meta.color.slice(4,-1)) || '157, 78, 221'}, 0.05)`;
+            
+            document.getElementById('diagnosis-title').innerHTML = `<i class="fa-solid ${meta.icon}"></i> ${meta.title}`;
+            document.getElementById('diagnosis-title').style.color = meta.color;
+            document.getElementById('diagnosis-text').textContent = meta.text;
+            document.getElementById('diagnosis-action').textContent = meta.action;
+
+            // Update Class Probabilities Progress Bars
+            const barList = document.getElementById('prob-bar-list');
+            barList.innerHTML = '';
+            
+            // Sort probabilities descending
+            const sortedProbs = Object.entries(result.probabilities).sort((a,b) => b[1] - a[1]);
+            
+            sortedProbs.forEach(([clsName, prob]) => {
+                const sName = getAnomalyShortName(clsName);
+                const itemMeta = anomalyMetadata[sName] || anomalyMetadata['Normal Status'];
+                const percent = (prob * 100).toFixed(1) + '%';
+                
+                const barHtml = `
+                    <div class="prob-item">
+                        <div class="prob-header">
+                            <span class="prob-label"><i class="fa-solid ${itemMeta.icon}" style="color: ${itemMeta.color};"></i> ${clsName}</span>
+                            <span>${percent}</span>
+                        </div>
+                        <div class="prob-track">
+                            <div class="prob-fill" style="width: ${prob * 100}%; background-color: ${itemMeta.color};"></div>
+                        </div>
+                    </div>
+                `;
+                barList.insertAdjacentHTML('beforeend', barHtml);
+            });
+
+            // Populate Daily Table
+            const tableBody = document.getElementById('table-body');
+            tableBody.innerHTML = '';
+            result.raw_data.forEach(row => {
+                const tr = `
+                    <tr>
+                        <td>Day ${row.Day}</td>
+                        <td>${row.VBat_Min_V.toFixed(2)}</td>
+                        <td>${row.VBat_Max_V.toFixed(2)}</td>
+                        <td>${row.Ah_Charge_Ah.toFixed(2)}</td>
+                        <td>${row.Ah_Load_Ah.toFixed(2)}</td>
+                        <td>${row.VPv_Max_V.toFixed(1)}</td>
+                        <td>${row.IPv_Max_A.toFixed(2)}</td>
+                        <td>${row.SOC_Pct.toFixed(1)}%</td>
+                        <td>${row.Temp_Max_C.toFixed(1)}</td>
+                        <td>${row.Temp_Min_C.toFixed(1)}</td>
+                        <td>${row.Night_Min.toFixed(0)}</td>
+                    </tr>
+                `;
+                tableBody.insertAdjacentHTML('beforeend', tr);
+            });
+
+            // Render Charts
+            renderCharts(result);
+            
+            // Scroll to results
+            resultsContainer.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function renderCharts(result) {
+            // Destroy existing charts to reload clean data
+            if (probabilityChartInstance) probabilityChartInstance.destroy();
+            if (telemetryChartInstance) telemetryChartInstance.destroy();
+
+            const timeline = result.timeline;
+            const labels = timeline.map(t => 'Day ' + t.day);
+            const classes = Object.keys(timeline[0].probabilities);
+
+            // 1. ANOMALY PROBABILITY EVOLUTION
+            const probDatasets = classes.map(cls => {
+                const sName = getAnomalyShortName(cls);
+                const itemMeta = anomalyMetadata[sName] || anomalyMetadata['Normal Status'];
+                return {
+                    label: cls,
+                    data: timeline.map(t => t.probabilities[cls]),
+                    borderColor: itemMeta.color,
+                    backgroundColor: itemMeta.color + '10',
+                    borderWidth: 2.5,
+                    fill: false,
+                    tension: 0.25,
+                    pointRadius: timeline.length > 50 ? 0 : 3
+                };
+            });
+
+            const ctx1 = document.getElementById('probChart').getContext('2d');
+            probabilityChartInstance = new Chart(ctx1, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: probDatasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            min: 0,
+                            max: 1.05,
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { color: '#a0aec0', callback: value => (value*100) + '%' }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#a0aec0' }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { color: '#e2e8f0', boxWidth: 12, font: { size: 10 } }
+                        }
+                    }
+                }
+            });
+
+            // 2. KEY TELEMETRY TRENDS
+            const chartData = result.chart_data;
+            const tLabels = chartData.days.map(d => 'Day ' + d);
+
+            const ctx2 = document.getElementById('telemetryChart').getContext('2d');
+            telemetryChartInstance = new Chart(ctx2, {
+                type: 'line',
+                data: {
+                    labels: tLabels,
+                    datasets: [
+                        {
+                            label: 'Battery Min (V)',
+                            data: chartData.vbat_min,
+                            borderColor: '#38bdf8',
+                            yAxisID: 'y-v',
+                            borderWidth: 2,
+                            tension: 0.2,
+                            pointRadius: 0
+                        },
+                        {
+                            label: 'Battery Max (V)',
+                            data: chartData.vbat_max,
+                            borderColor: '#818cf8',
+                            yAxisID: 'y-v',
+                            borderWidth: 2,
+                            tension: 0.2,
+                            pointRadius: 0
+                        },
+                        {
+                            label: 'State of Charge (%)',
+                            data: chartData.soc,
+                            borderColor: '#10b981',
+                            yAxisID: 'y-soc',
+                            borderWidth: 2,
+                            tension: 0.2,
+                            pointRadius: 0
+                        },
+                        {
+                            label: 'Charge (Ah)',
+                            data: chartData.ah_charge,
+                            borderColor: '#fbbf24',
+                            yAxisID: 'y-ah',
+                            borderWidth: 1.5,
+                            borderDash: [4, 4],
+                            tension: 0.2,
+                            pointRadius: 0
+                        },
+                        {
+                            label: 'Load (Ah)',
+                            data: chartData.ah_load,
+                            borderColor: '#f87171',
+                            yAxisID: 'y-ah',
+                            borderWidth: 1.5,
+                            borderDash: [4, 4],
+                            tension: 0.2,
+                            pointRadius: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#a0aec0' }
+                        },
+                        'y-v': {
+                            type: 'linear',
+                            position: 'left',
+                            title: { display: true, text: 'Voltage (V)', color: '#a0aec0' },
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { color: '#a0aec0' }
+                        },
+                        'y-soc': {
+                            type: 'linear',
+                            position: 'right',
+                            min: 0,
+                            max: 100,
+                            title: { display: true, text: 'SoC (%)', color: '#a0aec0' },
+                            grid: { display: false },
+                            ticks: { color: '#a0aec0' }
+                        },
+                        'y-ah': {
+                            type: 'linear',
+                            position: 'right',
+                            display: false,
+                            min: 0
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { color: '#e2e8f0', boxWidth: 12, font: { size: 10 } }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
