@@ -6,14 +6,89 @@ import shutil
 import pickle
 import subprocess
 import traceback
+import sqlite3
+from functools import wraps
 import numpy as np
 import pandas as pd
 
 import torch
 import torch.nn as nn
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, session, redirect, url_for
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
+app.secret_key = "solar_anomaly_pipeline_super_secret_key"
+
+# ====================================================================== #
+#  SQLITE DATABASE INITIALIZATION & ACCESS                               #
+# ====================================================================== #
+
+DB_PATH = os.path.join(os.path.dirname(__file__), "pipeline.db")
+
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    # Create users table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'technician'
+        )
+    """)
+    
+    # Create analysis logs table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS analysis_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            filename TEXT NOT NULL,
+            prediction TEXT NOT NULL,
+            confidence REAL NOT NULL,
+            analyzed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            user_id INTEGER NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    """)
+    
+    # Seed default users
+    cursor.execute("SELECT COUNT(*) FROM users")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute(
+            "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+            ("admin", generate_password_hash("admin123"), "admin")
+        )
+        cursor.execute(
+            "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+            ("imad", generate_password_hash("tech123"), "technician")
+        )
+        conn.commit()
+    conn.close()
+
+init_db()
+
+# ====================================================================== #
+#  AUTHENTICATION DECORATORS                                             #
+# ====================================================================== #
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return jsonify({"error": "Authentication required. Please log in."}), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return jsonify({"error": "Authentication required."}), 401
+        if session.get('role') != 'admin':
+            return jsonify({"error": "Administrator permissions required."}), 403
+        return f(*args, **kwargs)
+    return decorated_function
 
 # ====================================================================== #
 #  MODEL ARCHITECTURE DEFINITION                                         #
@@ -100,19 +175,39 @@ except Exception as e:
 def parse_log_with_cpp(log_path):
     """
     Executes the C++ parser (parser.exe) on the uploaded log file.
-    If the executable is not available or fails, falls back to reading 
-    a random sample from TrueDataUnstructured.json for demonstration.
+    Supports stdout-based printers as well as file-based output.
     """
     parser_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "parser", "parser.exe"))
     
-    # We will generate a temp file for output JSON
-    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
-        json_path = f.name
-    
+    if not os.path.exists(parser_path):
+        print("Parser executable not found; invoking fallback mock parser.")
+        return get_fallback_mock_data(log_path)
+        
     try:
-        if os.path.exists(parser_path):
-            print(f"Executing: {parser_path} {log_path} {json_path}")
-            result = subprocess.run(
+        # First try running with just the log file (expecting stdout)
+        print(f"Executing (stdout mode): {parser_path} {log_path}")
+        result = subprocess.run(
+            [parser_path, log_path],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False
+        )
+        
+        stdout_str = result.stdout.strip()
+        if stdout_str.startswith("[") or stdout_str.startswith("{"):
+            try:
+                return json.loads(stdout_str)
+            except json.JSONDecodeError:
+                pass
+                
+        # If stdout mode didn't return valid JSON, try running with temp output file
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+            json_path = f.name
+            
+        try:
+            print(f"Executing (file mode): {parser_path} {log_path} {json_path}")
+            result_two = subprocess.run(
                 [parser_path, log_path, json_path],
                 capture_output=True,
                 text=True,
@@ -120,31 +215,35 @@ def parse_log_with_cpp(log_path):
                 check=False
             )
             
-            # If the file is not created or empty, check stdout or a file next to it
-            if not os.path.exists(json_path) or os.path.getsize(json_path) == 0:
-                possible_json = log_path.rsplit(".", 1)[0] + ".json"
-                if os.path.exists(possible_json):
-                    shutil.move(possible_json, json_path)
-                elif result.stdout.strip().startswith("[") or result.stdout.strip().startswith("{"):
-                    with open(json_path, "w") as f_out:
-                        f_out.write(result.stdout)
-        else:
-            print("Parser executable not found; invoking fallback mock parser.")
-            raise FileNotFoundError("parser.exe not found")
-            
-        with open(json_path, "r", encoding="utf-8") as f_in:
-            data = json.load(f_in)
-        return data
+            if os.path.exists(json_path) and os.path.getsize(json_path) > 0:
+                with open(json_path, "r", encoding="utf-8") as f_in:
+                    return json.load(f_in)
+                    
+            # Check if JSON file was created in same folder as log file
+            possible_json = log_path.rsplit(".", 1)[0] + ".json"
+            if os.path.exists(possible_json):
+                with open(possible_json, "r", encoding="utf-8") as f_in:
+                    data = json.load(f_in)
+                os.remove(possible_json)
+                return data
+                
+            # Check stdout of the second run just in case
+            stdout_str2 = result_two.stdout.strip()
+            if stdout_str2.startswith("[") or stdout_str2.startswith("{"):
+                return json.loads(stdout_str2)
+                
+        finally:
+            if os.path.exists(json_path):
+                try:
+                    os.remove(json_path)
+                except Exception:
+                    pass
+                    
+        raise ValueError("Parser failed to output valid JSON.")
         
     except Exception as e:
-        print(f"Parser failed or skipped: {e}. Using unstructured JSON sample database fallback.")
+        print(f"Parser execution failed: {e}. Using fallback mock database.")
         return get_fallback_mock_data(log_path)
-    finally:
-        if os.path.exists(json_path):
-            try:
-                os.remove(json_path)
-            except Exception:
-                pass
 
 def get_fallback_mock_data(log_path):
     """
@@ -198,31 +297,59 @@ def get_fallback_mock_data(log_path):
         }
     }]
 
-def process_parsed_data(sample_dict):
+def process_parsed_data(sample_data):
     """
     Restructures the raw JSON sample keys to align with the training model features.
+    Supports both the old nested {"datalogger": {"daily": [...]}} format 
+    and the new flat array [{ "day": 1, "vbat_min_v": 13.0, ... }] format.
     """
-    datalogger = sample_dict.get("datalogger", {})
-    daily_list = datalogger.get("daily", [])
+    is_nested = False
+    daily_list = []
     
+    if isinstance(sample_data, dict):
+        datalogger = sample_data.get("datalogger", {})
+        daily_list = datalogger.get("daily", [])
+        is_nested = True
+    elif isinstance(sample_data, list):
+        daily_list = sample_data
+        is_nested = False
+    else:
+        return None, "Invalid parsed JSON data format."
+        
     if not daily_list:
         return None, "No daily log entries found in the parsed data."
         
     rows = []
     for d in daily_list:
-        rows.append({
-            "Day":          int(d.get("day", 0)),
-            "VBat_Min_V":   float(d.get("vbat_min_mv", 0)) / 1000.0,
-            "VBat_Max_V":   float(d.get("vbat_max_mv", 0)) / 1000.0,
-            "Ah_Charge_Ah": float(d.get("ah_charge_mah", 0)) / 1000.0,
-            "Ah_Load_Ah":   float(d.get("ah_load_mah", 0)) / 1000.0,
-            "VPv_Max_V":    float(d.get("vpv_max_mv", 0)) / 1000.0,
-            "IPv_Max_A":    float(d.get("ipv_max_ma", 0)) / 1000.0,
-            "SOC_Pct":      float(d.get("soc_pct", 0)) * 6.6,
-            "Temp_Max_C":   float(d.get("ext_temp_max_c", 0)),
-            "Temp_Min_C":   float(d.get("ext_temp_min_c", 0)),
-            "Night_Min":    float(d.get("nightlength_min", 0)),
-        })
+        if is_nested:
+            rows.append({
+                "Day":          int(d.get("day", 0)),
+                "VBat_Min_V":   float(d.get("vbat_min_mv", 0)) / 1000.0,
+                "VBat_Max_V":   float(d.get("vbat_max_mv", 0)) / 1000.0,
+                "Ah_Charge_Ah": float(d.get("ah_charge_mah", 0)) / 1000.0,
+                "Ah_Load_Ah":   float(d.get("ah_load_mah", 0)) / 1000.0,
+                "VPv_Max_V":    float(d.get("vpv_max_mv", 0)) / 1000.0,
+                "IPv_Max_A":    float(d.get("ipv_max_ma", 0)) / 1000.0,
+                "SOC_Pct":      float(d.get("soc_pct", 0)) * 6.6,
+                "Temp_Max_C":   float(d.get("ext_temp_max_c", 0)),
+                "Temp_Min_C":   float(d.get("ext_temp_min_c", 0)),
+                "Night_Min":    float(d.get("nightlength_min", 0)),
+            })
+        else:
+            # Flat array format (already in floats, maps text_max_c, night_h, etc.)
+            rows.append({
+                "Day":          int(d.get("day", 0)),
+                "VBat_Min_V":   float(d.get("vbat_min_v", 0)),
+                "VBat_Max_V":   float(d.get("vbat_max_v", 0)),
+                "Ah_Charge_Ah": float(d.get("ah_charge_ah", 0)),
+                "Ah_Load_Ah":   float(d.get("ah_load_ah", 0)),
+                "VPv_Max_V":    float(d.get("vpv_max_v", 0)),
+                "IPv_Max_A":    float(d.get("ipv_max_a", 0)),
+                "SOC_Pct":      float(d.get("soc_pct", 0)),
+                "Temp_Max_C":   float(d.get("text_max_c", 0)),
+                "Temp_Min_C":   float(d.get("text_min_c", 0)),
+                "Night_Min":    float(d.get("night_h", 0)) * 60.0,  # Convert hours to minutes
+            })
     
     df = pd.DataFrame(rows).sort_values("Day").reset_index(drop=True)
     return df, None
@@ -292,14 +419,142 @@ def make_prediction_timeline(df):
     return timeline
 
 # ====================================================================== #
-#  FLASK ROUTING                                                         #
+#  FLASK ROUTING & APIS                                                  #
 # ====================================================================== #
 
 @app.route("/")
 def index():
     return render_template("index.html")
 
+@app.route("/login", methods=["POST"])
+def login_api():
+    data = request.json or {}
+    username = data.get("username", "").strip()
+    password = data.get("password", "")
+    
+    if not username or not password:
+        return jsonify({"error": "Username and password are required."}), 400
+        
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, username, password_hash, role FROM users WHERE username = ?", (username,))
+    user = cursor.fetchone()
+    conn.close()
+    
+    if user and check_password_hash(user[2], password):
+        session['user_id'] = user[0]
+        session['username'] = user[1]
+        session['role'] = user[3]
+        return jsonify({
+            "success": True,
+            "user": {
+                "id": user[0],
+                "username": user[1],
+                "role": user[3]
+            }
+        })
+        
+    return jsonify({"error": "Invalid username or password."}), 401
+
+@app.route("/logout", methods=["POST"])
+def logout_api():
+    session.clear()
+    return jsonify({"success": True})
+
+@app.route("/me", methods=["GET"])
+def current_user_api():
+    if 'user_id' in session:
+        return jsonify({
+            "authenticated": True,
+            "user": {
+                "id": session['user_id'],
+                "username": session['username'],
+                "role": session['role']
+            }
+        })
+    return jsonify({"authenticated": False})
+
+@app.route("/users", methods=["GET", "POST"])
+@admin_required
+def manage_users_api():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    if request.method == "POST":
+        data = request.json or {}
+        username = data.get("username", "").strip()
+        password = data.get("password", "")
+        role = data.get("role", "technician")
+        
+        if not username or not password:
+            conn.close()
+            return jsonify({"error": "Username and password are required."}), 400
+            
+        try:
+            cursor.execute(
+                "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+                (username, generate_password_hash(password), role)
+            )
+            conn.commit()
+            conn.close()
+            return jsonify({"success": True})
+        except sqlite3.IntegrityError:
+            conn.close()
+            return jsonify({"error": "Username already exists."}), 400
+            
+    cursor.execute("SELECT id, username, role FROM users")
+    users = [{"id": r[0], "username": r[1], "role": r[2]} for r in cursor.fetchall()]
+    conn.close()
+    return jsonify({"users": users})
+
+@app.route("/users/<int:user_id>", methods=["DELETE"])
+@admin_required
+def delete_user_api(user_id):
+    if user_id == session.get('user_id'):
+        return jsonify({"error": "You cannot delete your own account."}), 400
+        
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
+@app.route("/history", methods=["GET"])
+@login_required
+def get_history_api():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    if session.get('role') == 'admin':
+        cursor.execute("""
+            SELECT l.id, l.filename, l.prediction, l.confidence, l.analyzed_at, u.username
+            FROM analysis_logs l
+            JOIN users u ON l.user_id = u.id
+            ORDER BY l.analyzed_at DESC
+        """)
+    else:
+        cursor.execute("""
+            SELECT l.id, l.filename, l.prediction, l.confidence, l.analyzed_at, u.username
+            FROM analysis_logs l
+            JOIN users u ON l.user_id = u.id
+            WHERE l.user_id = ?
+            ORDER BY l.analyzed_at DESC
+        """, (session['user_id'],))
+        
+    logs = [{
+        "id": r[0],
+        "filename": r[1],
+        "prediction": r[2],
+        "confidence": r[3],
+        "analyzed_at": r[4],
+        "username": r[5]
+    } for r in cursor.fetchall()]
+    conn.close()
+    return jsonify({"history": logs})
+
 @app.route("/upload", methods=["POST"])
+@login_required
 def upload_file():
     if "file" not in request.files:
         return jsonify({"error": "No file part in request."}), 400
@@ -320,11 +575,24 @@ def upload_file():
         # Parse log file using C++ parser (or Python fallback)
         parsed_data = parse_log_with_cpp(temp_path)
         
-        if not isinstance(parsed_data, list):
-            parsed_data = [parsed_data]
+        # Check if the parsed output is a flat array representing a single datalogger
+        is_single_sample = False
+        if isinstance(parsed_data, list) and len(parsed_data) > 0:
+            first_item = parsed_data[0]
+            if isinstance(first_item, dict) and "day" in first_item and "datalogger" not in first_item:
+                is_single_sample = True
+                
+        if is_single_sample:
+            # Wrap as a single list of daily records
+            samples_to_process = [parsed_data]
+        else:
+            if not isinstance(parsed_data, list):
+                samples_to_process = [parsed_data]
+            else:
+                samples_to_process = parsed_data
             
         results = []
-        for idx, sample in enumerate(parsed_data):
+        for idx, sample in enumerate(samples_to_process):
             df, err = process_parsed_data(sample)
             if err or df is None:
                 continue
@@ -360,6 +628,17 @@ def upload_file():
             
         if not results:
             return jsonify({"error": "Failed to extract valid sequence telemetry (requires >= 1 day)."}), 400
+            
+        # Log successfully analyzed model runs in SQLite
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        for res in results:
+            cursor.execute(
+                "INSERT INTO analysis_logs (filename, prediction, confidence, user_id) VALUES (?, ?, ?, ?)",
+                (file.filename, res["final_prediction"], res["confidence"], session["user_id"])
+            )
+        conn.commit()
+        conn.close()
             
         return jsonify({"success": True, "results": results})
         
