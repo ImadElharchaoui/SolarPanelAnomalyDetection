@@ -31,8 +31,19 @@ resource/GenData_Samples.csv
 *.log
 *.zip
 *.json
+PipeLine/pipeline.db
 
-# Model files (uncomment if you wish to exclude weights from Git history)
-# PipeLine/models/*.pth
-# PipeLine/models/*.pkl
-# models/
+# C++ Compilation Outputs
+*.o
+*.obj
+*.out
+build/
+bin/
+parser_src/build/
+parser_src/bin/
+
+# Prevent ignoring compiled parser executables in PipeLine
+!PipeLine/parser/parser.exe
+!PipeLine/parser/parser-linux
+!PipeLine/parser/parser-linux.exe
+!PipeLine/parser/parser

@@ -174,14 +174,36 @@ except Exception as e:
 
 def parse_log_with_cpp(log_path):
     """
-    Executes the C++ parser (parser.exe) on the uploaded log file.
+    Executes the C++ parser on the uploaded log file.
+    Detects platform (Windows/Linux) and resolves the parser binary name.
     Supports stdout-based printers as well as file-based output.
     """
-    parser_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "parser", "parser.exe"))
+    parser_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "parser"))
+    
+    # Detect OS
+    if sys.platform.startswith("win"):
+        parser_name = "parser.exe"
+    else:
+        # Check standard Linux names
+        if os.path.exists(os.path.join(parser_dir, "parser-linux.exe")):
+            parser_name = "parser-linux.exe"
+        elif os.path.exists(os.path.join(parser_dir, "parser-linux")):
+            parser_name = "parser-linux"
+        else:
+            parser_name = "parser"
+            
+    parser_path = os.path.join(parser_dir, parser_name)
     
     if not os.path.exists(parser_path):
-        print("Parser executable not found; invoking fallback mock parser.")
+        print(f"Parser executable not found at {parser_path}; invoking fallback mock parser.")
         return get_fallback_mock_data(log_path)
+        
+    # Grant execute permission on Linux
+    if not sys.platform.startswith("win"):
+        try:
+            os.chmod(parser_path, 0o755)
+        except Exception as e:
+            print(f"Failed to chmod parser binary: {e}")
         
     try:
         # First try running with just the log file (expecting stdout)
