@@ -2,7 +2,7 @@ services:
   - type: web
     name: solar-anomaly-pipeline
     env: python
-    buildCommand: pip install -r requirements.txt && pip install gunicorn
+    buildCommand: pip install -r PipeLine/requirements.txt
     startCommand: gunicorn --bind 0.0.0.0:$PORT --chdir PipeLine app:app
     envVars:
       - key: PYTHON_VERSION

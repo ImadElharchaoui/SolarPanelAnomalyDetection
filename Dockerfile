@@ -13,12 +13,14 @@ ENV HOME=/home/user \
 
 WORKDIR $HOME/app
 
-# Copy requirements and install
-COPY --chown=user:user requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
-RUN pip install --no-cache-dir --user gunicorn
+# Create PipeLine folder in working directory and copy its requirements
+RUN mkdir -p PipeLine
+COPY --chown=user:user PipeLine/requirements.txt ./PipeLine/
 
-# Copy project files
+# Install requirements
+RUN pip install --no-cache-dir --user -r PipeLine/requirements.txt
+
+# Copy the rest of the project files
 COPY --chown=user:user . .
 
 # Expose default Hugging Face Spaces port

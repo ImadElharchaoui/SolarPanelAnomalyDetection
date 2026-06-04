@@ -1,0 +1,20 @@
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# Python Cache
+__pycache__/
+*.py[cod]
+
+# SQLite Database local audit logs
+pipeline.db
+
+# Temp logs
+*.log
+
+# Prevent ignoring compiled parser executables
+!parser/parser.exe
+!parser/parser-linux
+!parser/parser-linux.exe
+!parser/parser
