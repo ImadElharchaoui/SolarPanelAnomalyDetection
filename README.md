@@ -130,36 +130,46 @@ The web application is located in the [PipeLine](file:///c:/Users/HP/Desktop/Ima
 
 ### Prerequisites
 * Python 3.10+
-* PyTorch (CPU or CUDA)
-* Flask, Pandas, NumPy, Scikit-learn
+* CMake & C++ compiler (only if compiling the parser yourself)
 
-### Local Installation
+### Local Installation & Environment Setup
 
-You can set up independent virtual environments for either workspace depending on your needs:
+To keep dependencies isolated and prevent library conflicts, each project component uses its own independent python virtual environment (`.venv`).
 
-#### A. Setup Model Training Workspace:
-```bash
-cd TrainingModel
-python -m venv .venv
-.\.venv\Scripts\activate
-pip install -r requirements.txt
-```
+You can automatically create all virtual environments and install all dependencies in a single step using the provided configuration scripts in the root directory:
 
-#### B. Setup Web Application Workspace:
-```bash
-cd PipeLine
-python -m venv .venv
-.\.venv\Scripts\activate
-pip install -r requirements.txt
-```
+* **On Windows**: Double-click `setup_envs.bat`, or run in PowerShell/CMD:
+  ```cmd
+  setup_envs.bat
+  ```
+* **On Linux/macOS**: Run in your terminal:
+  ```bash
+  chmod +x setup_envs.sh
+  ./setup_envs.sh
+  ```
+
+This will automatically create `.venv` folders inside `TrainingModel/`, `PipeLine/`, and `RaspberryPi/` and install their respective packages.
+
+---
+
+### Running Project Components
+
+#### A. Model Training (`TrainingModel/`)
+1. Activate the training environment:
+   * *Windows*: `.\TrainingModel\.venv\Scripts\activate`
+   * *Linux/macOS*: `source TrainingModel/.venv/bin/activate`
 2. Run the training notebook at [TrainingModel/training-model.ipynb](file:///c:/Users/HP/Desktop/Imad-Temp/SolarPanelAnomalyDetection/TrainingModel/training-model.ipynb) to train the model.
 
-### Running the Web Pipeline Application
-Navigate to the root directory and start the Flask web server:
-```bash
-python PipeLine/app.py
-```
-Open your browser and navigate to: **[http://127.0.0.1:5000](http://127.0.0.1:5000)**
+#### B. Web Application Pipeline (`PipeLine/`)
+1. Run the Flask web application using its dedicated virtual environment:
+   * *Windows*: `.\PipeLine\.venv\Scripts\python PipeLine/app.py`
+   * *Linux/macOS*: `./PipeLine/.venv/bin/python PipeLine/app.py`
+2. Open your browser and navigate to: **[http://127.0.0.1:5000](http://127.0.0.1:5000)**
+
+#### C. Raspberry Pi Anomaly Check (`RaspberryPi/`)
+1. Run daily check CLI program or import the library function using its dedicated environment:
+   * *Windows*: `.\RaspberryPi\.venv\Scripts\python RaspberryPi/daily_check.py`
+   * *Linux/macOS*: `./RaspberryPi/.venv/bin/python RaspberryPi/daily_check.py`
 
 ---
 

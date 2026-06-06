@@ -26,9 +26,8 @@ if hasattr(sys.stderr, "reconfigure"):
     except Exception:
         pass
 
-# ====================================================================== #
-#  MODEL ARCHITECTURE DEFINITION (must match training & app.py exactly) #
-# ====================================================================== #
+#  MODEL ARCHITECTURE DEFINITION (must match training & app.py exactly) 
+
 
 class ImprovedLSTMClassifier(nn.Module):
     def __init__(self, input_size, hidden_size=128, num_classes=7, dropout_rate=0.4):
@@ -71,9 +70,7 @@ class ImprovedLSTMClassifier(nn.Module):
         
         return self.fc3(x)
 
-# ====================================================================== #
-#  ANOMALY RECOMMENDATIONS MAP                                           #
-# ====================================================================== #
+#  ANOMALY RECOMMENDATIONS MAP
 
 RECOMMENDATIONS = {
     "Normal Status": "Normal Status: Balanced charge/discharge cycles. No maintenance action required.",
@@ -86,9 +83,7 @@ RECOMMENDATIONS = {
     "F-06b Thermal Risk": "Thermal Risk: Battery temp >45°C during active charging phase. URGENT: Disconnect system; inspect thermal cooling."
 }
 
-# ====================================================================== #
-#  SQLITE HISTORY STORE                                                  #
-# ====================================================================== #
+#  SQLITE HISTORY STORE
 
 def init_db(db_path):
     """Initializes the SQLite database that tracks daily data per ESP32."""
@@ -116,9 +111,7 @@ def init_db(db_path):
     conn.commit()
     return conn
 
-# ====================================================================== #
-#  PARSING & NORMALIZATION PIPELINE                                      #
-# ====================================================================== #
+#  PARSING & NORMALIZATION PIPELINE
 
 def load_parsed_json(logs_input):
     """Loads parsed JSON from either a file path or a raw JSON string."""
@@ -267,9 +260,7 @@ def process_parsed_data(json_data):
             
     return pd.DataFrame(rows)
 
-# ====================================================================== #
-#  MODEL CACHING & RETRIEVAL                                             #
-# ====================================================================== #
+#  MODEL CACHING & RETRIEVAL
 
 _CACHED_MODEL = None
 _CACHED_SCALER = None
@@ -337,9 +328,7 @@ def get_model_artifacts(model_dir=None):
     
     return model, scaler, le, feature_columns
 
-# ====================================================================== #
-#  EXPOSED LIBRARY FUNCTION                                              #
-# ====================================================================== #
+#  EXPOSED LIBRARY FUNCTION
 
 def run_daily_check(daily_data, serial_number, db_path=None, model_dir=None, clear_history=False):
     """
@@ -474,9 +463,7 @@ def run_daily_check(daily_data, serial_number, db_path=None, model_dir=None, cle
         }
     }
 
-# ====================================================================== #
-#  MAIN CLI PIPELINE WRAPPER                                             #
-# ====================================================================== #
+#  MAIN CLI PIPELINE WRAPPER
 
 def main():
     parser = argparse.ArgumentParser(
@@ -543,17 +530,17 @@ def main():
         prediction = result["prediction"]
         
         print("=" * 60)
-        print("⚡ SOLAR STREET LIGHT ANOMALY DETECTION - DAILY CHECK ⚡")
+        print("SOLAR STREET LIGHT ANOMALY DETECTION - DAILY CHECK")
         print("=" * 60)
-        print(f"📡 Device Serial Number: {device['serial_number']}")
-        print(f"📅 Total Recorded Days:   {device['total_historical_days']} day(s)")
-        print(f"📥 New Days Processed:   {device['new_records_inserted']} day(s)")
-        print(f"🔄 Sequence Length:      {device['sequence_days_retrieved']}/30 days (Padded: {device['sequence_days_padded']} days)")
+        print(f"Device Serial Number: {device['serial_number']}")
+        print(f"Total Recorded Days:   {device['total_historical_days']} day(s)")
+        print(f"New Days Processed:   {device['new_records_inserted']} day(s)")
+        print(f"Sequence Length:      {device['sequence_days_retrieved']}/30 days (Padded: {device['sequence_days_padded']} days)")
         print("-" * 60)
-        print(f"🔎 PREDICTED STATUS:     \033[1m{prediction['anomaly_label']}\033[0m")
-        print(f"📈 CONFIDENCE LEVEL:     {prediction['confidence'] * 100:.2f}%")
+        print(f"PREDICTED STATUS:     \033[1m{prediction['anomaly_label']}\033[0m")
+        print(f"CONFIDENCE LEVEL:     {prediction['confidence'] * 100:.2f}%")
         print("-" * 60)
-        print(f"💡 CORRECTIVE RECOMMENDATION:\n{prediction['corrective_action']}")
+        print(f"CORRECTIVE RECOMMENDATION:\n{prediction['corrective_action']}")
         print("-" * 60)
         print("Status Class Probability Breakdown:")
         for label, prob in sorted(prediction['probabilities'].items(), key=lambda x: x[1], reverse=True):
