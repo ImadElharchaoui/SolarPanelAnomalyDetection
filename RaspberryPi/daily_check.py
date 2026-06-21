@@ -28,9 +28,8 @@ if hasattr(sys.stderr, "reconfigure"):
 
 #  MODEL ARCHITECTURE DEFINITION (must match training & app.py exactly) 
 
-
 class ImprovedLSTMClassifier(nn.Module):
-    def __init__(self, input_size, hidden_size=128, num_classes=7, dropout_rate=0.4):
+    def __init__(self, input_size, hidden_size=128, num_classes=8, dropout_rate=0.4):
         super().__init__()
         
         # Two-layer LSTM

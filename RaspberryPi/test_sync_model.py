@@ -1,5 +1,5 @@
 """
-test_sync_model_simulation.py – Simulates periodic model sync checks
+test_sync_model_simulation.py - Simulates periodic model sync checks
 =====================================================================
 
 Polls a (mocked or real) server repeatedly with a configurable delay,

@@ -1,5 +1,5 @@
 """
-sync_model.py – Raspberry Pi Model Synchronization Utility
+sync_model.py - Raspberry Pi Model Synchronization Utility
 ===========================================================
 
 Polls the web server for the latest model version and, if a newer
@@ -13,7 +13,7 @@ Usage (imported by daily_check or other scripts):
     from sync_model import sync_if_needed
     updated = sync_if_needed("http://192.168.1.100:5000", "./models")
     if updated:
-        print("Model updated – reload artifacts before inference.")
+        print("Model updated - reload artifacts before inference.")
 
 Cron example (every hour):
     0 * * * * /usr/bin/python3 /home/pi/sync_model.py \
@@ -126,7 +126,7 @@ def sync_if_needed(server_url: str, model_dir: str, timeout: int = 15) -> bool:
 
     # ── 3. Atomic replacement ──────────────────────────────────────────────
     # Rename is atomic on most POSIX filesystems; on Windows it may raise
-    # OSError if the destination already exists – we handle that gracefully.
+    # OSError if the destination already exists - we handle that gracefully.
     try:
         os.replace(tmp_path, weights_path)
     except OSError:
@@ -146,7 +146,7 @@ def sync_if_needed(server_url: str, model_dir: str, timeout: int = 15) -> bool:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Raspberry Pi Model Sync – downloads the latest model "
+        description="Raspberry Pi Model Sync - downloads the latest model "
                     "weights from the Solar Panel web server if a new version "
                     "is available."
     )
@@ -189,7 +189,7 @@ def main():
             print(json.dumps({"success": True, "updated": updated}))
         else:
             status = "updated" if updated else "already up-to-date"
-            print(f"[sync_model] Done – model {status}.")
+            print(f"[sync_model] Done - model {status}.")
 
     except RuntimeError as e:
         if args.json:

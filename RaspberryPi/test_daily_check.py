@@ -1,5 +1,5 @@
 """
-test_daily_check_simulation.py – Simulates daily ESP32 telemetry checks
+test_daily_check_simulation.py - Simulates daily ESP32 telemetry checks
 ========================================================================
 
 Reads a CSV file row by row (one row = one day) and feeds each day's data
@@ -166,7 +166,7 @@ def run_simulation(
 
     if not json_mode:
         print("=" * 60)
-        print("  SOLAR SYSTEM – DAILY CHECK SIMULATION")
+        print("  SOLAR SYSTEM - DAILY CHECK SIMULATION")
         print("=" * 60)
         print(f"  CSV file        : {csv_path}")
         print(f"  Total CSV rows  : {total_rows}")
