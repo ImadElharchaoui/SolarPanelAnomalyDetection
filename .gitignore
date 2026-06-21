@@ -27,7 +27,7 @@ db.db
 desktop.ini
 
 # Large Telemetry datasets / Generated outputs
-resource/GenData_Samples.csv
+resource/*
 *.log
 *.zip
 *.json
@@ -51,3 +51,6 @@ parser_src/bin/
 
 # ignore temp files 
 temp.py
+
+# .env files
+*.env

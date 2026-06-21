@@ -16,6 +16,7 @@ Usage:
     python test_daily_check_simulation.py --json
 """
 
+from pandas.io import parsers
 import os
 import sys
 import time
@@ -327,6 +328,43 @@ def main():
         "--json",
         action="store_true",
         help="Output results as JSON (machine-readable mode)"
+    )
+
+    parser.add_argument(
+        "--smtp-server",
+        default=os.getenv("SMTP_SERVER", "smtp.gmail.com")
+    )
+
+    parser.add_argument(
+        "--smtp-port",
+        type=int,
+        default=int(os.getenv("SMTP_PORT", 587))
+    )
+
+    parser.add_argument(
+        "--smtp-user",
+        default=os.getenv("SMTP_USER", "")
+    )
+
+    parser.add_argument(
+        "--smtp-password",
+        default=os.getenv("SMTP_PASSWORD", "")
+    )
+
+    parser.add_argument(
+        "--smtp-sender",
+        default=os.getenv("SMTP_SENDER", "")
+    )
+
+    parser.add_argument(
+        "--email-recipient",
+        default=os.getenv("EMAIL_RECIPIENT", "")
+    )
+
+    parser.add_argument(
+        "--email-alert",
+        action="store_true",
+        default=os.getenv("EMAIL_ALERT", "false").lower() == "true"
     )
 
     args = parser.parse_args()

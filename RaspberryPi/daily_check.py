@@ -6,6 +6,9 @@ import argparse
 import pickle
 import traceback
 import warnings
+import smtplib
+from email.mime.text import MIMEText
+from email.header import Header
 import pandas as pd
 import numpy as np
 import torch
@@ -464,6 +467,63 @@ def run_daily_check(daily_data, serial_number, db_path=None, model_dir=None, cle
         }
     }
 
+#  SMTP EMAIL ALERT HELPER
+
+def send_anomaly_email(result, recipient, sender, server, port, username, password):
+    """Sends an email notification when a device anomaly is detected."""
+    device = result["device"]
+    pred = result["prediction"]
+    
+    subject = f" [SOLAR SYSTEM ALERT] Anomaly Detected on Device {device['serial_number']}"
+    
+    body = f"""Solar Panel Anomaly Detection Alert
+======================================
+Device Serial Number: {device['serial_number']}
+Total Recorded Days:  {device['total_historical_days']}
+Inference Sequence:   {device['sequence_days_retrieved']}/30 days (Padded: {device['sequence_days_padded']} days)
+
+--------------------------------------
+PREDICTED STATUS:  {pred['anomaly_label']}
+CONFIDENCE LEVEL:  {pred['confidence'] * 100:.2f}%
+--------------------------------------
+
+CORRECTIVE ACTION RECOMMENDATION:
+{pred['corrective_action']}
+
+--------------------------------------
+Probability Breakdown:
+"""
+    for label, prob in sorted(pred['probabilities'].items(), key=lambda x: x[1], reverse=True):
+        body += f"  - {label:<25} : {prob * 100:>6.2f}%\n"
+        
+    body += "\nThis is an automated diagnostic alert. Please inspect the device coordinates as soon as possible."
+    
+    msg = MIMEText(body, "plain", "utf-8")
+    msg["Subject"] = Header(subject, "utf-8")
+    msg["From"] = sender
+    msg["To"] = recipient
+    
+    try:
+        print(f"[SMTP] Connecting to server {server}:{port}...")
+        if int(port) == 465:
+            smtp = smtplib.SMTP_SSL(server, port, timeout=10)
+        else:
+            smtp = smtplib.SMTP(server, port, timeout=10)
+            smtp.starttls()
+            
+        if username and password:
+            print("[SMTP] Authenticating...")
+            smtp.login(username, password)
+            
+        print(f"[SMTP] Sending alert email to {recipient}...")
+        smtp.sendmail(sender, [recipient], msg.as_string())
+        smtp.quit()
+        print("[SMTP] ✓ Alert email sent successfully.")
+        return True
+    except Exception as e:
+        print(f"[SMTP] ERROR: Failed to send email alert: {e}", file=sys.stderr)
+        return False
+
 #  MAIN CLI PIPELINE WRAPPER
 
 def main():
@@ -501,6 +561,48 @@ def main():
         "--json",
         action="store_true",
         help="Output results in machine-readable JSON format instead of a styled console report."
+    )
+    parser.add_argument(
+        "--email-alert",
+        action="store_true",
+        default=os.environ.get("EMAIL_ALERT", "false").lower() in ("true", "1", "yes"),
+        help="Enable email alerts on anomaly detection (also configurable via EMAIL_ALERT env)."
+    )
+    parser.add_argument(
+        "--smtp-server",
+        type=str,
+        default=os.environ.get("SMTP_SERVER", "smtp.gmail.com"),
+        help="SMTP server host (defaults to SMTP_SERVER env or smtp.gmail.com)."
+    )
+    parser.add_argument(
+        "--smtp-port",
+        type=int,
+        default=int(os.environ.get("SMTP_PORT", 587)),
+        help="SMTP server port (defaults to SMTP_PORT env or 587)."
+    )
+    parser.add_argument(
+        "--smtp-user",
+        type=str,
+        default=os.environ.get("SMTP_USER", ""),
+        help="SMTP username (defaults to SMTP_USER env)."
+    )
+    parser.add_argument(
+        "--smtp-password",
+        type=str,
+        default=os.environ.get("SMTP_PASSWORD", ""),
+        help="SMTP password (defaults to SMTP_PASSWORD env)."
+    )
+    parser.add_argument(
+        "--smtp-sender",
+        type=str,
+        default=os.environ.get("SMTP_SENDER", ""),
+        help="SMTP sender email address (defaults to SMTP_SENDER env)."
+    )
+    parser.add_argument(
+        "--email-recipient",
+        type=str,
+        default=os.environ.get("EMAIL_RECIPIENT", ""),
+        help="Recipient email address (defaults to EMAIL_RECIPIENT env)."
     )
     
     args = parser.parse_args()
@@ -548,6 +650,21 @@ def main():
             bar = "█" * int(prob * 20)
             print(f"  - {label:<25} : {prob * 100:>6.2f}% {bar}")
         print("=" * 60)
+        
+    # SMTP email alert dispatch check
+    if args.email_alert and result["prediction"]["anomaly_label"] != "Normal Status":
+        if not args.email_recipient or not args.smtp_sender:
+            print("[SMTP] WARNING: Email alert is enabled but recipient or sender is not set. Email alert skipped.", file=sys.stderr)
+        else:
+            send_anomaly_email(
+                result=result,
+                recipient=args.email_recipient,
+                sender=args.smtp_sender,
+                server=args.smtp_server,
+                port=args.smtp_port,
+                username=args.smtp_user,
+                password=args.smtp_password
+            )
 
 if __name__ == "__main__":
     main()
