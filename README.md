@@ -164,8 +164,18 @@ Processes daily telemetry for a local device.
   * Can be imported as a library function in python files.
 * **Terminal Command**:
   ```bash
-  python daily_check.py <path_to_daily_log.json> <device_serial_number> [--db-path db.db] [--model-dir models_dir] [--clear-history] [--json]
+  python daily_check.py <path_to_daily_log.json> <device_serial_number> [--db-path db.db] [--model-dir models_dir] [--clear-history] [--json] [--email-alert] [--smtp-server SERVER] [--smtp-port PORT] [--smtp-user USER] [--smtp-password PASS] [--smtp-sender SENDER] [--email-recipient RECIPIENT]
   ```
+* **Email Alert Configuration**:
+  * `--email-alert`: Enable SMTP notifications on anomaly detection (also configurable via `EMAIL_ALERT` environment variable).
+  * `--smtp-server`: Host of the SMTP server (defaults to `smtp.gmail.com` or `SMTP_SERVER` env).
+  * `--smtp-port`: Connection port of the SMTP server (defaults to `587` or `SMTP_PORT` env).
+  * `--smtp-user`: SMTP username credential (defaults to `SMTP_USER` env).
+  * `--smtp-password`: SMTP password credential (defaults to `SMTP_PASSWORD` env).
+  * `--smtp-sender`: Sender email address (defaults to `SMTP_SENDER` env).
+  * `--email-recipient`: Recipient email address (defaults to `EMAIL_RECIPIENT` env).
+  > [!TIP]
+  > When executing under local debugging mode (via `scheduler.py --mode debugging` or CSV telemetry playbacks in `test_daily_check.py`), the system dynamically tracks notification state and limits email dispatch to a **single alert per test run** to prevent inbox flooding.
 
 ### 2. Model Synchronizer (`sync_model.py`)
 Allows the edge device to retrieve the latest weights from the central server.

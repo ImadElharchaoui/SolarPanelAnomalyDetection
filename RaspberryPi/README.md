@@ -73,6 +73,15 @@ Evaluates telemetry logs for a specific ESP32 datalogger device.
   * `--model-dir`: Custom path to the folder containing model files.
   * `--clear-history`: Reset all historical database entries for this serial number prior to evaluation.
   * `--json`: Print machine-readable JSON output instead of the formatted console report.
+  * `--email-alert`: Enable SMTP notifications on anomaly detection (also configurable via `EMAIL_ALERT` environment variable).
+  * `--smtp-server`: SMTP server host (defaults to `smtp.gmail.com` or `SMTP_SERVER` env).
+  * `--smtp-port`: SMTP server port (defaults to `587` or `SMTP_PORT` env).
+  * `--smtp-user`: SMTP authentication username (defaults to `SMTP_USER` env).
+  * `--smtp-password`: SMTP authentication password (defaults to `SMTP_PASSWORD` env).
+  * `--smtp-sender`: Sender email address (defaults to `SMTP_SENDER` env).
+  * `--email-recipient`: Recipient email address (defaults to `EMAIL_RECIPIENT` env).
+  > [!TIP]
+  > When run via `scheduler.py` in `debugging` mode or within the `test_daily_check.py` playback simulator, the system activates email alert suppression, ensuring only a **single alert email is sent per session** to avoid flooding your inbox.
 
 #### Standalone Execution:
 ```bash

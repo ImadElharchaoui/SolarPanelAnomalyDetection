@@ -73,6 +73,48 @@ def main():
         default=None,
         help="Path to SQLite database. Defaults to 'device_history.db' relative to this script."
     )
+    parser.add_argument(
+        "--email-alert",
+        action="store_true",
+        default=os.environ.get("EMAIL_ALERT", "false").lower() in ("true", "1", "yes"),
+        help="Enable email alerts on anomaly detection (also configurable via EMAIL_ALERT env)."
+    )
+    parser.add_argument(
+        "--smtp-server",
+        type=str,
+        default=os.environ.get("SMTP_SERVER", "smtp.gmail.com"),
+        help="SMTP server host (defaults to SMTP_SERVER env or smtp.gmail.com)."
+    )
+    parser.add_argument(
+        "--smtp-port",
+        type=int,
+        default=int(os.environ.get("SMTP_PORT", 587)),
+        help="SMTP server port (defaults to SMTP_PORT env or 587)."
+    )
+    parser.add_argument(
+        "--smtp-user",
+        type=str,
+        default=os.environ.get("SMTP_USER", ""),
+        help="SMTP username (defaults to SMTP_USER env)."
+    )
+    parser.add_argument(
+        "--smtp-password",
+        type=str,
+        default=os.environ.get("SMTP_PASSWORD", ""),
+        help="SMTP password (defaults to SMTP_PASSWORD env)."
+    )
+    parser.add_argument(
+        "--smtp-sender",
+        type=str,
+        default=os.environ.get("SMTP_SENDER", ""),
+        help="SMTP sender email address (defaults to SMTP_SENDER env)."
+    )
+    parser.add_argument(
+        "--email-recipient",
+        type=str,
+        default=os.environ.get("EMAIL_RECIPIENT", ""),
+        help="Recipient email address (defaults to EMAIL_RECIPIENT env)."
+    )
     
     args = parser.parse_args()
     
@@ -100,11 +142,15 @@ def main():
     print(f"  - Serial Number: {args.serial_number}")
     print(f"  - Model Directory: {model_dir}")
     print(f"  - Database Path: {db_path}")
+    print(f"  - Email Alerts: {args.email_alert}")
+    if args.email_alert:
+        print(f"    ↳ Recipient: {args.email_recipient}")
     print("-" * 60)
     
     # We initialize the last run times to 0 so that they run immediately on startup
     last_sync_time = 0
     last_check_time = 0
+    email_alert_sent = False
     
     try:
         while True:
@@ -124,11 +170,22 @@ def main():
             if now - last_check_time >= check_interval:
                 print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Triggering daily telemetry analysis...")
                 try:
+                    current_email_alert = args.email_alert
+                    if args.mode == "debugging" and email_alert_sent:
+                        current_email_alert = False
+                        
                     result = run_daily_check(
                         daily_data=SAMPLE_DAILY_TELEMETRY,
                         serial_number=args.serial_number,
                         db_path=db_path,
-                        model_dir=model_dir
+                        model_dir=model_dir,
+                        email_alert=current_email_alert,
+                        email_recipient=args.email_recipient,
+                        smtp_server=args.smtp_server,
+                        smtp_port=args.smtp_port,
+                        smtp_user=args.smtp_user,
+                        smtp_password=args.smtp_password,
+                        smtp_sender=args.smtp_sender
                     )
                     pred = result["prediction"]
                     device = result["device"]
@@ -136,6 +193,9 @@ def main():
                     print(f"     Status: {pred['anomaly_label']} (Confidence: {pred['confidence']*100:.2f}%)")
                     print(f"     Action: {pred['corrective_action']}")
                     print(f"     Device: {device['serial_number']} (Total days in DB: {device['total_historical_days']})")
+                    if result.get("email_sent"):
+                        email_alert_sent = True
+                        print("     [SMTP] Anomaly email alert sent (debugging mode will suppress future alert spam).")
                 except Exception as e:
                     print(f"  => Daily check failed: {e}", file=sys.stderr)
                 last_check_time = now

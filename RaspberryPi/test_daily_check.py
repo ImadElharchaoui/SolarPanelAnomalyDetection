@@ -151,6 +151,13 @@ def run_simulation(
     clear_history: bool,
     max_days: int | None,
     start_day: int,
+    email_alert: bool = False,
+    smtp_server: str = "smtp.gmail.com",
+    smtp_port: int = 587,
+    smtp_user: str = "",
+    smtp_password: str = "",
+    smtp_sender: str = "",
+    email_recipient: str = "",
 ) -> None:
     """Main simulation loop."""
 
@@ -186,6 +193,7 @@ def run_simulation(
     success_count = 0
     error_count   = 0
     results_log   = []
+    email_alert_sent = False
 
     for sim_day, (_, row) in enumerate(rows_to_process.iterrows(), start=start_day):
         csv_day = int(row.get("Day", sim_day))
@@ -196,12 +204,23 @@ def run_simulation(
                   f"(CSV Day {csv_day}) …", end="", flush=True)
 
         try:
+            current_email_alert = email_alert
+            if email_alert_sent:
+                current_email_alert = False
+
             result = run_daily_check(
                 daily_data=daily_dict,
                 serial_number=serial_number,
                 db_path=db_path,
                 model_dir=model_dir,
                 clear_history=(clear_history and sim_day == start_day),
+                email_alert=True,
+                email_recipient=email_recipient,
+                smtp_server=smtp_server,
+                smtp_port=smtp_port,
+                smtp_user=smtp_user,
+                smtp_password=smtp_password,
+                smtp_sender=smtp_sender
             )
             success_count += 1
             results_log.append({
@@ -212,6 +231,9 @@ def run_simulation(
                 "status": "ok",
             })
             print_result(sim_day, csv_day, result, json_mode)
+            if result.get("email_sent"):
+                email_alert_sent = True
+                print("     [SMTP] Anomaly email alert sent (debugging test simulation will suppress future alert spam).")
 
         except Exception as e:
             error_count += 1
@@ -379,6 +401,13 @@ def main():
         clear_history=args.clear_history,
         max_days=args.max_days,
         start_day=args.start_day,
+        email_alert=args.email_alert,
+        smtp_server=args.smtp_server,
+        smtp_port=args.smtp_port,
+        smtp_user=args.smtp_user,
+        smtp_password=args.smtp_password,
+        smtp_sender=args.smtp_sender,
+        email_recipient=args.email_recipient
     )
 
 

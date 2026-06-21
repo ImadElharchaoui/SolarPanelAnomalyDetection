@@ -1,3 +1,4 @@
+from pathlib import Path
 import os
 import sys
 import json
@@ -13,9 +14,12 @@ import pandas as pd
 import numpy as np
 import torch
 import torch.nn as nn
+from dotenv import load_dotenv
 
 # Suppress warnings (like PyTorch's LSTM single-layer dropout warning)
 warnings.filterwarnings("ignore", category=UserWarning)
+
+DEBUG = True
 
 # Configure output encoding to prevent crashes on terminals with limited character sets (like Windows CP1252)
 if hasattr(sys.stdout, "reconfigure"):
@@ -332,9 +336,74 @@ def get_model_artifacts(model_dir=None):
     
     return model, scaler, le, feature_columns
 
+#  SMTP EMAIL ALERT HELPER
+
+def send_anomaly_email(result, recipient, sender, server, port, username, password):
+    """Sends an email notification when a device anomaly is detected."""
+    device = result["device"]
+    pred = result["prediction"]
+    
+    subject = f"⚠️ [SOLAR SYSTEM ALERT] Anomaly Detected on Device {device['serial_number']}"
+    
+    body = f"""Solar Panel Anomaly Detection Alert
+======================================
+Device Serial Number: {device['serial_number']}
+Total Recorded Days:  {device['total_historical_days']}
+Inference Sequence:   {device['sequence_days_retrieved']}/30 days (Padded: {device['sequence_days_padded']} days)
+
+--------------------------------------
+🔎 PREDICTED STATUS:  {pred['anomaly_label']}
+📈 CONFIDENCE LEVEL:  {pred['confidence'] * 100:.2f}%
+--------------------------------------
+
+💡 CORRECTIVE ACTION RECOMMENDATION:
+{pred['corrective_action']}
+
+--------------------------------------
+Probability Breakdown:
+"""
+    for label, prob in sorted(pred['probabilities'].items(), key=lambda x: x[1], reverse=True):
+        body += f"  - {label:<25} : {prob * 100:>6.2f}%\n"
+        
+    body += "\nThis is an automated diagnostic alert. Please inspect the device coordinates as soon as possible."
+    
+    msg = MIMEText(body, "plain", "utf-8")
+    msg["Subject"] = Header(subject, "utf-8")
+    msg["From"] = sender
+    msg["To"] = recipient
+    
+    try:
+        print(f"[SMTP] Connecting to server {server}:{port}...")
+        if int(port) == 465:
+            smtp = smtplib.SMTP_SSL(server, port, timeout=10)
+        else:
+            smtp = smtplib.SMTP(server, port, timeout=10)
+            smtp.starttls()
+            
+        if username and password:
+            print("[SMTP] Authenticating...")
+            smtp.login(username, password)
+            
+        print(f"[SMTP] Sending alert email to {recipient}...")
+        smtp.sendmail(sender, [recipient], msg.as_string())
+        smtp.quit()
+        print("[SMTP] ✓ Alert email sent successfully.")
+        return True
+    except Exception as e:
+        print(f"[SMTP] ERROR: Failed to send email alert: {e}", file=sys.stderr)
+        return False
+
 #  EXPOSED LIBRARY FUNCTION
 
-def run_daily_check(daily_data, serial_number, db_path=None, model_dir=None, clear_history=False):
+def run_daily_check(daily_data, serial_number, db_path=None, model_dir=None,
+                    clear_history=False,
+                    email_alert=False,
+                    email_recipient="",
+                    smtp_server="smtp.gmail.com",
+                    smtp_port=587,
+                    smtp_user="",
+                    smtp_password="",
+                    smtp_sender=""):
     """
     Evaluates daily telemetry logs for a specific ESP32 datalogger.
     Can be imported by other Python scripts:
@@ -362,7 +431,16 @@ def run_daily_check(daily_data, serial_number, db_path=None, model_dir=None, cle
     # Initialize SQLite database
     conn = init_db(db_path)
     cursor = conn.cursor()
-    
+    # STMP credentiels
+    _ENV_PATH = ".env"
+    load_dotenv(_ENV_PATH)
+    smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+    smtp_port = int(os.getenv("SMTP_PORT", 587))
+    smtp_user = os.getenv("SMTP_USER", "")
+    smtp_password = os.getenv("SMTP_PASSWORD", "")
+    smtp_sender = os.getenv("SMTP_SENDER", "")
+    email_recipient = os.getenv("EMAIL_RECIPIENT", "")
+    print(f"stmp user : {smtp_user}")
     # Clear history if requested
     if clear_history:
         cursor.execute("DELETE FROM device_history WHERE serial_number = ?", (serial_number,))
@@ -451,7 +529,7 @@ def run_daily_check(daily_data, serial_number, db_path=None, model_dir=None, cle
     probabilities = {le.classes_[i]: float(probs[i]) for i in range(len(probs))}
     recommendation = RECOMMENDATIONS.get(pred_label, "No standard recommendation available for this status.")
     
-    return {
+    res = {
         "device": {
             "serial_number": serial_number,
             "total_historical_days": max_day,
@@ -464,11 +542,32 @@ def run_daily_check(daily_data, serial_number, db_path=None, model_dir=None, cle
             "confidence": confidence,
             "probabilities": probabilities,
             "corrective_action": recommendation
-        }
+        },
+        "email_sent": False
     }
+    print(f"EMAIL ALERT: {email_alert}")
+    print(f"PREDICTION : {pred_label}")
+    print(f"smtp_user {smtp_user} , {smtp_password}")
+    # SMTP email alert dispatch check
+    if email_alert and pred_label != "Normal Status":
+        if not email_recipient or not smtp_sender:
+            print("[SMTP] WARNING: Email alert is enabled but recipient or sender is not set. Email alert skipped.", file=sys.stderr)
+        else:
+            sent = send_anomaly_email(
+                result=res,
+                recipient=email_recipient,
+                sender=smtp_sender,
+                server=smtp_server,
+                port=smtp_port,
+                username=smtp_user,
+                password=smtp_password
+            )
+            res["email_sent"] = sent
+
+    return res
+
 
 #  SMTP EMAIL ALERT HELPER
-
 def send_anomaly_email(result, recipient, sender, server, port, username, password):
     """Sends an email notification when a device anomaly is detected."""
     device = result["device"]
@@ -613,7 +712,14 @@ def main():
             serial_number=args.serial_number,
             db_path=args.db_path,
             model_dir=args.model_dir,
-            clear_history=args.clear_history
+            clear_history=args.clear_history,
+            email_alert=args.email_alert,
+            email_recipient=args.email_recipient,
+            smtp_server=args.smtp_server,
+            smtp_port=args.smtp_port,
+            smtp_user=args.smtp_user,
+            smtp_password=args.smtp_password,
+            smtp_sender=args.smtp_sender
         )
     except Exception as e:
         error_msg = f"Check failed: {e}"
@@ -651,20 +757,6 @@ def main():
             print(f"  - {label:<25} : {prob * 100:>6.2f}% {bar}")
         print("=" * 60)
         
-    # SMTP email alert dispatch check
-    if args.email_alert and result["prediction"]["anomaly_label"] != "Normal Status":
-        if not args.email_recipient or not args.smtp_sender:
-            print("[SMTP] WARNING: Email alert is enabled but recipient or sender is not set. Email alert skipped.", file=sys.stderr)
-        else:
-            send_anomaly_email(
-                result=result,
-                recipient=args.email_recipient,
-                sender=args.smtp_sender,
-                server=args.smtp_server,
-                port=args.smtp_port,
-                username=args.smtp_user,
-                password=args.smtp_password
-            )
 
 if __name__ == "__main__":
     main()
