@@ -15,7 +15,7 @@ for %%f in (%folders%) do (
         :: Create virtual environment if it doesn't exist
         if not exist %%f\.venv (
             echo Creating virtual environment in %%f\.venv...
-            python -m venv %%f\.venv
+            py -3.12 -m venv %%f\.venv
         ) else (
             echo Virtual environment already exists in %%f\.venv.
         )

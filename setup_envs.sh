@@ -24,7 +24,7 @@ for PART in "${PARTS[@]}"; do
         if [ -f "$PART/requirements.txt" ]; then
             echo "Installing requirements from $PART/requirements.txt..."
             "$PART/.venv/bin/python" -m pip install --upgrade pip
-            "$PART/.venv/bin/python" -m pip install -r "$PART/requirements.txt" --extra-index-url https://download.pytorch.org/whl/cpu
+            "%PART/.venv/bin/python -m pip install -r $PART/requirements.txt" --extra-index-url https://download.pytorch.org/whl/cpu
         else
             echo "Warning: No requirements.txt found in $PART"
         fi

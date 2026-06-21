@@ -47,3 +47,7 @@ parser_src/bin/
 !PipeLine/parser/parser-linux
 !PipeLine/parser/parser-linux.exe
 !PipeLine/parser/parser
+
+
+# ignore temp files 
+temp.py

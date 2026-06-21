@@ -277,18 +277,20 @@ def get_model_artifacts(model_dir=None):
     
     # 1. Search for directory if not specified
     if not model_dir:
+        print(os.path.join(os.path.dirname(__file__), "models"))
         possible_dirs = [
-            os.path.join(os.path.dirname(__file__), "models"),
-            os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "PipeLine", "models")),
-            os.path.abspath(os.path.join(os.getcwd(), "models")),
-            os.path.abspath(os.path.join(os.getcwd(), "PipeLine", "models"))
+           os.path.abspath(os.path.join(os.path.dirname(__file__), "models"))
         ]
         for d in possible_dirs:
             if os.path.exists(os.path.join(d, "lstm_fault_detector.pth")):
                 model_dir = d
                 break
+        
+        # If still not found, default to local models directory
+        if not model_dir:
+            model_dir = os.path.join(os.path.dirname(__file__), "models")
                 
-    if not model_dir or not os.path.exists(model_dir):
+    if not os.path.exists(model_dir):
         raise FileNotFoundError(
             "Model directory not found. Please place model files in './models' "
             "or specify the path."

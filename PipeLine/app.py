@@ -7,13 +7,15 @@ import pickle
 import subprocess
 import traceback
 import sqlite3
+import threading
 from functools import wraps
 import numpy as np
 import pandas as pd
 
 import torch
 import torch.nn as nn
-from flask import Flask, request, jsonify, render_template, session, redirect, url_for
+import torch.optim as optim
+from flask import Flask, request, jsonify, render_template, session, redirect, url_for, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
@@ -51,7 +53,32 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users(id)
         )
     """)
-    
+
+    # Create correction logs table (active learning audit trail)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS correction_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            wrong_prediction TEXT NOT NULL,
+            correct_label TEXT NOT NULL,
+            corrected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            user_id INTEGER NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    """)
+
+    # Create model_version table (single-row tracker)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS model_version (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            version INTEGER NOT NULL DEFAULT 1,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    cursor.execute(
+        "INSERT OR IGNORE INTO model_version (id, version) VALUES (1, 1)"
+    )
+    conn.commit()
+
     # Seed default users
     cursor.execute("SELECT COUNT(*) FROM users")
     if cursor.fetchone()[0] == 0:
@@ -140,6 +167,9 @@ class ImprovedLSTMClassifier(nn.Module):
 # ====================================================================== #
 
 MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
+
+# Thread-safety lock for model fine-tuning (prevents concurrent backward passes)
+_model_lock = threading.Lock()
 
 try:
     with open(os.path.join(MODELS_DIR, "model_config.pkl"), "rb") as f:
@@ -673,6 +703,223 @@ def upload_file():
                 os.remove(temp_path)
             except Exception:
                 pass
+
+# ====================================================================== #
+#  ACTIVE LEARNING – CORRECTION & MODEL SYNC APIS                       #
+# ====================================================================== #
+
+def _get_model_version():
+    """Returns the current integer model version from the database."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT version FROM model_version WHERE id = 1")
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row else 1
+
+
+def _bump_model_version():
+    """Increments the model version counter and returns the new version."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE model_version SET version = version + 1, updated_at = CURRENT_TIMESTAMP WHERE id = 1"
+    )
+    conn.commit()
+    cursor.execute("SELECT version FROM model_version WHERE id = 1")
+    new_version = cursor.fetchone()[0]
+    conn.close()
+    return new_version
+
+
+@app.route("/api/correct", methods=["POST"])
+@login_required
+def correct_prediction():
+    """
+    Active-Learning correction endpoint.
+
+    Accepts a JSON payload with the wrong predicted label and the correct
+    ground-truth label, builds a synthetic one-sample sequence (the last
+    known scaled values are reused from the model's weight space via the
+    provided sequence tensor), then performs a **single forward+backward
+    gradient step** to nudge the model weights toward the correct class.
+
+    The corrected weights are persisted to disk immediately and the model
+    version counter is bumped so that Raspberry Pi devices know to
+    download the new checkpoint.
+
+    Request body (JSON):
+        {
+            "wrong_prediction": "F-03 PV Issue",
+            "correct_label":    "Normal Status",
+            "sequence":         [[f1, f2, ..., f10], ...],  // 30×10 floats (optional)
+            "learning_rate":    0.0001                      // optional, default 1e-4
+        }
+    """
+    global model
+
+    data = request.json or {}
+    wrong_pred  = data.get("wrong_prediction", "").strip()
+    correct_lbl = data.get("correct_label", "").strip()
+    lr          = float(data.get("learning_rate", 1e-4))
+    sequence    = data.get("sequence", None)   # optional 30×10 list-of-lists
+
+    # ── Validate labels ────────────────────────────────────────────────
+    if not wrong_pred or not correct_lbl:
+        return jsonify({"error": "Both 'wrong_prediction' and 'correct_label' are required."}), 400
+
+    known_classes = list(le.classes_)
+    if correct_lbl not in known_classes:
+        return jsonify({
+            "error": f"Unknown label '{correct_lbl}'. Valid labels: {known_classes}"
+        }), 400
+
+    correct_idx = known_classes.index(correct_lbl)
+
+    # ── Build input tensor ─────────────────────────────────────────────
+    if sequence is not None:
+        try:
+            seq_array = np.array(sequence, dtype=np.float32)
+            if seq_array.ndim != 2 or seq_array.shape[1] != len(feature_columns):
+                return jsonify({
+                    "error": f"'sequence' must be shape (N, {len(feature_columns)}). Got {seq_array.shape}."
+                }), 400
+            # Pad or truncate to exactly 30 steps
+            seq_len = 30
+            if len(seq_array) < seq_len:
+                pad = np.zeros((seq_len - len(seq_array), seq_array.shape[1]), dtype=np.float32)
+                seq_array = np.vstack([pad, seq_array])
+            else:
+                seq_array = seq_array[-seq_len:]
+            # Scale
+            flat = seq_array.reshape(-1, seq_array.shape[1])
+            flat_scaled = scaler.transform(flat)
+            seq_scaled = flat_scaled.reshape(1, seq_len, -1)
+        except Exception as e:
+            return jsonify({"error": f"Invalid 'sequence' data: {e}"}), 400
+    else:
+        # Fallback: use an all-zero sequence (forces the decision boundary shift
+        # via label supervision only — still effective as a soft correction)
+        seq_len = 30
+        seq_scaled = np.zeros((1, seq_len, len(feature_columns)), dtype=np.float32)
+
+    X_tensor = torch.tensor(seq_scaled, dtype=torch.float32)
+    y_tensor = torch.tensor([correct_idx], dtype=torch.long)
+
+    # ── One-step fine-tuning (thread-safe) ─────────────────────────────
+    with _model_lock:
+        model.train()
+        try:
+            fine_optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-5)
+            criterion_ft   = nn.CrossEntropyLoss()
+
+            fine_optimizer.zero_grad()
+
+            # Switch BN layers to eval so they use running stats, not batch stats
+            for m in model.modules():
+                if isinstance(m, (nn.BatchNorm1d, nn.BatchNorm2d)):
+                    m.eval()
+
+            outputs = model(X_tensor) 
+            loss    = criterion_ft(outputs, y_tensor)
+            loss.backward()
+            fine_optimizer.step()
+        finally:
+            model.eval()
+
+        # ── Persist updated weights to disk ────────────────────────────
+        try:
+            weights_path = os.path.join(MODELS_DIR, "lstm_fault_detector.pth")
+            torch.save(model.state_dict(), weights_path)
+        except Exception as e:
+            return jsonify({"error": f"Failed to save corrected weights: {e}"}), 500
+
+    # ── Bump version & log correction ──────────────────────────────────
+    new_version = _bump_model_version()
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO correction_logs (wrong_prediction, correct_label, user_id) VALUES (?, ?, ?)",
+        (wrong_pred, correct_lbl, session["user_id"])
+    )
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        "success": True,
+        "message": f"Model corrected: '{wrong_pred}' → '{correct_lbl}'.",
+        "loss": float(loss.item()),
+        "model_version": new_version
+    })
+
+
+@app.route("/api/model/version", methods=["GET"])
+def model_version_api():
+    """
+    Public (no auth required) endpoint for Raspberry Pi devices to poll
+    the current model version number.
+
+    Response JSON:
+        { "version": 5, "updated_at": "2025-06-17 14:32:01" }
+    """
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT version, updated_at FROM model_version WHERE id = 1")
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        return jsonify({"version": 1, "updated_at": None})
+    return jsonify({"version": row[0], "updated_at": row[1]})
+
+
+@app.route("/api/model/download", methods=["GET"])
+def model_download_api():
+    """
+    Public (no auth required) endpoint that streams the latest
+    lstm_fault_detector.pth weights file to any requester.
+
+    Raspberry Pi devices call this after detecting a newer version via
+    /api/model/version, then atomically replace their local checkpoint.
+    """
+    weights_path = os.path.join(MODELS_DIR, "lstm_fault_detector.pth")
+    if not os.path.exists(weights_path):
+        return jsonify({"error": "Model weights file not found on server."}), 404
+
+    version = _get_model_version()
+    return send_file(
+        weights_path,
+        mimetype="application/octet-stream",
+        as_attachment=True,
+        download_name=f"lstm_fault_detector_v{version}.pth"
+    )
+
+
+@app.route("/api/corrections", methods=["GET"])
+@admin_required
+def list_corrections_api():
+    """
+    Admin-only endpoint: returns the audit trail of all corrections made
+    by operators via the active-learning feedback loop.
+    """
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT c.id, c.wrong_prediction, c.correct_label, c.corrected_at, u.username
+        FROM correction_logs c
+        JOIN users u ON c.user_id = u.id
+        ORDER BY c.corrected_at DESC
+    """)
+    logs = [{
+        "id": r[0],
+        "wrong_prediction": r[1],
+        "correct_label": r[2],
+        "corrected_at": r[3],
+        "corrected_by": r[4]
+    } for r in cursor.fetchall()]
+    conn.close()
+    return jsonify({"corrections": logs})
+
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000, debug=True)

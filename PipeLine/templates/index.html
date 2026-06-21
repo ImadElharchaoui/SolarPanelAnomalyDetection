@@ -290,7 +290,7 @@
             border: 1px solid var(--glass-border);
             border-radius: 8px;
             padding: 0.8rem;
-            color: white;
+            color: rgb(224, 9, 9);
             font-family: 'Plus Jakarta Sans', sans-serif;
             font-size: 0.95rem;
             outline: none;
@@ -494,13 +494,13 @@
         }
 
         .overview-card.confidence .overview-icon {
-            background: rgba(59, 130, 246, 0.15);
-            color: #60a5fa;
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
         }
 
         .overview-card.days .overview-icon {
-            background: rgba(16, 185, 129, 0.15);
-            color: #34d399;
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
         }
 
         .overview-val {
@@ -709,6 +709,47 @@
             border-top: 1px solid var(--glass-border);
             margin-top: auto;
         }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* History Search Bar */
+        .search-container {
+            margin-bottom: 1.5rem;
+            display: flex;
+            gap: 1rem;
+        }
+
+        .search-input {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            padding: 0.6rem 1rem;
+            color: white;
+            font-size: 0.9rem;
+            outline: none;
+        }
+
+        .search-input:focus {
+            border-color: var(--accent-purple);
+        }
     </style>
 </head>
 
@@ -718,6 +759,9 @@
         <div class="logo">
             <i class="fa-solid fa-chart-line"></i>
             <span>Solar anomaly detection pipeline</span>
+            <span id="model-version-badge"
+                style="font-size: 0.75rem; padding: 0.2rem 0.6rem; border-radius: 12px; background: rgba(167, 139, 250, 0.15); color: #cbd5e1; border: 1px solid rgba(167, 139, 250, 0.3); margin-left: 0.8rem; font-family: monospace;">Model:
+                v1</span>
         </div>
         <div class="user-nav-profile" id="user-nav-profile" style="display: none;">
             <i class="fa-solid fa-user-circle"></i>
@@ -762,6 +806,10 @@
                 <button class="tab-btn" id="tab-admin-btn" style="display: none;" onclick="switchTab('tab-admin')">
                     <i class="fa-solid fa-users-gear"></i> User Management
                 </button>
+                <button class="tab-btn" id="tab-corrections-btn" style="display: none;"
+                    onclick="switchTab('tab-corrections')">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Model Corrections Log
+                </button>
             </div>
 
             <!-- Tab 1: Analyze & Predict -->
@@ -792,8 +840,17 @@
                             <h2 id="result-logger-name">Datalogger Diagnosis</h2>
                             <p>Processed sequence of telemetry metrics using LSTM Neural Network model.</p>
                         </div>
-                        <div id="result-badge-container">
-                            <!-- Dynamic Badge -->
+                        <div id="result-badge-container" style="display: flex; gap: 0.8rem; align-items: center;">
+                            <button class="btn-logout-small"
+                                style="background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.3); color: #60a5fa;"
+                                onclick="exportCSV()">
+                                <i class="fa-solid fa-file-csv"></i> Export CSV
+                            </button>
+                            <button class="btn-logout-small"
+                                style="background: rgba(255, 255, 255, 0.05); border-color: var(--glass-border); color: var(--text-muted);"
+                                onclick="resetAnalysis()">
+                                <i class="fa-solid fa-rotate-left"></i> Reset
+                            </button>
                         </div>
                     </div>
 
@@ -841,6 +898,14 @@
                                     <canvas id="telemetryChart"></canvas>
                                 </div>
                             </div>
+
+                            <!-- Environmental & PV Performance -->
+                            <div class="chart-box">
+                                <h3><i class="fa-solid fa-temperature-three-quarters"></i> PV & Thermal Performance</h3>
+                                <div class="chart-wrapper">
+                                    <canvas id="envChart"></canvas>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Right: Probability List & Diagnosis -->
@@ -863,6 +928,45 @@
                                 </div>
                                 <div class="diagnosis-action" id="diagnosis-action">
                                     Recommended: Regular scheduled inspections.
+                                </div>
+                            </div>
+
+                            <!-- Model Correction Panel -->
+                            <div class="glass-card" id="correction-panel"
+                                style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem; margin-top: 0.5rem; background: rgba(157, 78, 221, 0.02); border: 1px solid rgba(157, 78, 221, 0.15);">
+                                <h3
+                                    style="font-family: 'Outfit', sans-serif; font-size: 1.1rem; font-weight: 600; color: #e2e8f0; display: flex; align-items: center; gap: 0.6rem; margin: 0;">
+                                    <i class="fa-solid fa-wand-magic-sparkles" style="color: #c084fc;"></i> Nudge /
+                                    Correct Model
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
+                                    If the model prediction is incorrect, select the ground-truth label below to perform
+                                    online fine-tuning and update the global checkpoint.
+                                </p>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label for="correct-label-select">True Ground-Truth Status</label>
+                                    <select id="correct-label-select" class="form-select"
+                                        style="width: 100%; padding: 0.6rem;">
+                                        <option value="Normal Status">Normal Status</option>
+                                        <option value="F-01 Controller Bug">F-01 Controller Bug</option>
+                                        <option value="F-02 Low SoC (Weather)">F-02 Low SoC (Weather)</option>
+                                        <option value="F-03 PV Issue">F-03 PV Issue</option>
+                                        <option value="F-04 Load Oscillation">F-04 Load Oscillation</option>
+                                        <option value="F-05 Total Power Loss">F-05 Total Power Loss</option>
+                                        <option value="F-06a Battery Aging Trend">F-06a Battery Aging Trend</option>
+                                        <option value="F-06b Thermal Risk">F-06b Thermal Risk</option>
+                                    </select>
+                                </div>
+                                <button class="btn-predict" id="btn-submit-correction"
+                                    style="width: 100%; margin-top: 0; padding: 0.65rem 1rem; font-size: 0.9rem; border-radius: 8px;">
+                                    <div class="spinner" id="correction-spinner"
+                                        style="width: 16px; height: 16px; margin-right: 0.5rem; display: none;"></div>
+                                    <i class="fa-solid fa-circle-check" id="correction-btn-icon"></i> Apply Online
+                                    Correction
+                                </button>
+                                <div id="correction-success-msg"
+                                    style="display: none; font-size: 0.82rem; color: #34d399; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); padding: 0.6rem; border-radius: 6px; text-align: center;">
+                                    Correction applied successfully!
                                 </div>
                             </div>
                         </div>
@@ -906,6 +1010,11 @@
                         <h2>Model Analysis Backups History</h2>
                         <button class="btn-predict" style="margin-top: 0; padding: 0.6rem 1.2rem;"
                             onclick="loadHistory()"><i class="fa-solid fa-rotate"></i> Refresh Log</button>
+                    </div>
+
+                    <div class="search-container">
+                        <input type="text" id="history-search" class="search-input"
+                            placeholder="Search by file name or verdict..." oninput="filterHistory()">
                     </div>
 
                     <div class="table-section">
@@ -990,6 +1099,42 @@
                     </div>
                 </section>
             </div>
+
+            <!-- Tab 4: Model Corrections Log (Admin Only) -->
+            <div id="tab-corrections" class="tab-content">
+                <section class="glass-card">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--glass-border); padding-bottom: 1.2rem; margin-bottom: 1.5rem;">
+                        <h2>Model Corrections Audit Trail</h2>
+                        <button class="btn-predict" style="margin-top: 0; padding: 0.6rem 1.2rem;"
+                            onclick="loadCorrectionsHistory()">
+                            <i class="fa-solid fa-rotate"></i> Refresh Log
+                        </button>
+                    </div>
+
+                    <div class="table-section">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Audit ID</th>
+                                    <th>Incorrect Verdict</th>
+                                    <th>Correct Target Label</th>
+                                    <th>Adjustment Date</th>
+                                    <th>Corrected By (Operator)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="corrections-table-body">
+                                <tr>
+                                    <td colspan="5"
+                                        style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                                        No model corrections have been recorded.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
         </div>
     </main>
 
@@ -1022,10 +1167,20 @@
         const createUserForm = document.getElementById('create-user-form');
         const adminErrorBanner = document.getElementById('admin-error-banner');
 
+        // Model Correction Elements
+        const btnSubmitCorrection = document.getElementById('btn-submit-correction');
+        const correctLabelSelect = document.getElementById('correct-label-select');
+        const correctionSpinner = document.getElementById('correction-spinner');
+        const correctionBtnIcon = document.getElementById('correction-btn-icon');
+        const correctionSuccessMsg = document.getElementById('correction-success-msg');
+
         let currentUser = null;
         let selectedFile = null;
         let probabilityChartInstance = null;
         let telemetryChartInstance = null;
+        let envChartInstance = null;
+        let activeResultData = null; // Store currently loaded sequence
+        let historyData = [];
 
         // Anomaly metadata descriptions
         const anomalyMetadata = {
@@ -1139,12 +1294,19 @@
 
             // Restrict admin panel tab
             const adminTabBtn = document.getElementById('tab-admin-btn');
+            const correctionsTabBtn = document.getElementById('tab-corrections-btn');
             if (currentUser.role === 'admin') {
                 adminTabBtn.style.display = 'flex';
+                correctionsTabBtn.style.display = 'flex';
                 loadUsersList();
+                loadCorrectionsHistory();
             } else {
                 adminTabBtn.style.display = 'none';
+                correctionsTabBtn.style.display = 'none';
             }
+
+            // Load model version badge
+            loadModelVersion();
 
             switchTab('tab-upload');
             loadHistory();
@@ -1217,6 +1379,8 @@
                 loadHistory();
             } else if (tabId === 'tab-admin') {
                 loadUsersList();
+            } else if (tabId === 'tab-corrections') {
+                loadCorrectionsHistory();
             }
         };
 
@@ -1225,36 +1389,50 @@
             try {
                 const response = await fetch('/history');
                 const data = await response.json();
-
-                const tbody = document.getElementById('history-table-body');
-                tbody.innerHTML = '';
-
-                if (!data.history || data.history.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">No historical analyses recorded yet. Run a telemetry scan to populate.</td></tr>`;
-                    return;
-                }
-
-                data.history.forEach(log => {
-                    const shortName = getAnomalyShortName(log.prediction);
-                    const meta = anomalyMetadata[shortName] || anomalyMetadata['Normal Status'];
-                    const date = new Date(log.analyzed_at + 'Z').toLocaleString();
-                    const confPercent = (log.confidence * 100).toFixed(1) + '%';
-
-                    const row = `
-                        <tr>
-                            <td>#${log.id}</td>
-                            <td style="font-family: monospace;">${log.filename}</td>
-                            <td><span class="badge ${meta.badge}"><i class="fa-solid ${meta.icon}"></i> ${log.prediction}</span></td>
-                            <td><strong>${confPercent}</strong></td>
-                            <td>${date}</td>
-                            <td><i class="fa-solid fa-user-gear" style="font-size: 0.8rem; margin-right: 0.2rem; color: #a78bfa;"></i> ${log.username}</td>
-                        </tr>
-                    `;
-                    tbody.insertAdjacentHTML('beforeend', row);
-                });
+                historyData = data.history || [];
+                renderHistoryTable(historyData);
             } catch (err) {
                 console.error("Failed to load history list:", err);
             }
+        }
+
+        function renderHistoryTable(data) {
+            const tbody = document.getElementById('history-table-body');
+            tbody.innerHTML = '';
+
+            if (data.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">No historical analyses recorded yet. Run a telemetry scan to populate.</td></tr>`;
+                return;
+            }
+
+            data.forEach(log => {
+                const shortName = getAnomalyShortName(log.prediction);
+                const meta = anomalyMetadata[shortName] || anomalyMetadata['Normal Status'];
+                const date = new Date(log.analyzed_at + 'Z').toLocaleString();
+                const confPercent = (log.confidence * 100).toFixed(1) + '%';
+
+                const row = `
+                    <tr>
+                        <td>#${log.id}</td>
+                        <td style="font-family: monospace;">${log.filename}</td>
+                        <td><span class="badge ${meta.badge}"><i class="fa-solid ${meta.icon}"></i> ${log.prediction}</span></td>
+                        <td><strong>${confPercent}</strong></td>
+                        <td>${date}</td>
+                        <td><i class="fa-solid fa-user-gear" style="font-size: 0.8rem; margin-right: 0.2rem; color: #a78bfa;"></i> ${log.username}</td>
+                    </tr>
+                `;
+                tbody.insertAdjacentHTML('beforeend', row);
+            });
+        }
+
+        function filterHistory() {
+            const query = document.getElementById('history-search').value.toLowerCase();
+            const filtered = historyData.filter(log =>
+                log.filename.toLowerCase().includes(query) ||
+                log.prediction.toLowerCase().includes(query) ||
+                log.username.toLowerCase().includes(query)
+            );
+            renderHistoryTable(filtered);
         }
 
         // Admin: Load Staff Accounts List
@@ -1406,8 +1584,11 @@
                     return;
                 }
 
+                // Store active results data for correction API
+                activeResultData = data.results[0];
+
                 // Render Results
-                renderDashboard(data.results[0]);
+                renderDashboard(activeResultData);
                 loadHistory(); // Reload history in background
             } catch (err) {
                 console.error(err);
@@ -1438,7 +1619,16 @@
             const meta = anomalyMetadata[shortPrediction] || anomalyMetadata['Normal Status'];
 
             const badgeContainer = document.getElementById('result-badge-container');
-            badgeContainer.innerHTML = `<span class="badge ${meta.badge}"><i class="fa-solid ${meta.icon}"></i> ${rawPrediction}</span>`;
+            // Keep reset/export buttons and append badge
+            const buttonsHtml = `
+                <button class="btn-logout-small" style="background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.3); color: #60a5fa;" onclick="exportCSV()">
+                    <i class="fa-solid fa-file-csv"></i> Export CSV
+                </button>
+                <button class="btn-logout-small" style="background: rgba(255, 255, 255, 0.05); border-color: var(--glass-border); color: var(--text-muted);" onclick="resetAnalysis()">
+                    <i class="fa-solid fa-rotate-left"></i> Reset
+                </button>
+            `;
+            badgeContainer.innerHTML = buttonsHtml + `<span class="badge ${meta.badge}"><i class="fa-solid ${meta.icon}"></i> ${rawPrediction}</span>`;
 
             const diagCard = document.getElementById('diagnosis-card');
             diagCard.style.borderColor = meta.color;
@@ -1508,6 +1698,7 @@
             // Destroy existing charts to reload clean data
             if (probabilityChartInstance) probabilityChartInstance.destroy();
             if (telemetryChartInstance) telemetryChartInstance.destroy();
+            if (envChartInstance) envChartInstance.destroy();
 
             const timeline = result.timeline;
             const labels = timeline.map(t => 'Day ' + t.day);
@@ -1659,7 +1850,215 @@
                     }
                 }
             });
+
+            // 3. ENVIRONMENTAL & PV PERFORMANCE
+            const ctx3 = document.getElementById('envChart').getContext('2d');
+            envChartInstance = new Chart(ctx3, {
+                type: 'line',
+                data: {
+                    labels: tLabels,
+                    datasets: [
+                        {
+                            label: 'Max PV (V)',
+                            data: result.raw_data.map(r => r.VPv_Max_V),
+                            borderColor: '#f59e0b',
+                            yAxisID: 'y-v',
+                            borderWidth: 2,
+                            tension: 0.2,
+                            pointRadius: 0
+                        },
+                        {
+                            label: 'Max PV Current (A)',
+                            data: result.raw_data.map(r => r.IPv_Max_A),
+                            borderColor: '#3b82f6',
+                            yAxisID: 'y-a',
+                            borderWidth: 2,
+                            tension: 0.2,
+                            pointRadius: 0
+                        },
+                        {
+                            label: 'Max Temp (°C)',
+                            data: result.raw_data.map(r => r.Temp_Max_C),
+                            borderColor: '#ef4444',
+                            yAxisID: 'y-t',
+                            borderWidth: 2,
+                            tension: 0.2,
+                            pointRadius: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: '#a0aec0' } },
+                        'y-v': { position: 'left', title: { display: true, text: 'PV Voltage (V)', color: '#a0aec0' }, ticks: { color: '#a0aec0' } },
+                        'y-a': { position: 'right', title: { display: true, text: 'PV Current (A)', color: '#a0aec0' }, ticks: { color: '#a0aec0' }, grid: { display: false } },
+                        'y-t': { position: 'right', display: false }
+                    },
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: '#e2e8f0', boxWidth: 12, font: { size: 10 } } }
+                    }
+                }
+            });
         }
+
+        // Load Model Version from Server
+        async function loadModelVersion() {
+            try {
+                const response = await fetch('/api/model/version');
+                const data = await response.json();
+                const badge = document.getElementById('model-version-badge');
+                if (badge) {
+                    badge.textContent = `Model: v${data.version || 1}`;
+                }
+            } catch (err) {
+                console.error("Failed to load model version:", err);
+            }
+        }
+
+        // Load Corrections Audit Trail
+        async function loadCorrectionsHistory() {
+            try {
+                const response = await fetch('/api/corrections');
+                const data = await response.json();
+
+                const tbody = document.getElementById('corrections-table-body');
+                tbody.innerHTML = '';
+
+                if (!data.corrections || data.corrections.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">No model corrections recorded yet.</td></tr>`;
+                    return;
+                }
+
+                data.corrections.forEach(log => {
+                    const date = new Date(log.corrected_at + 'Z').toLocaleString();
+                    const row = `
+                        <tr>
+                            <td>#${log.id}</td>
+                            <td><span class="badge badge-danger"><i class="fa-solid fa-triangle-exclamation"></i> ${log.wrong_prediction}</span></td>
+                            <td><span class="badge badge-success"><i class="fa-solid fa-circle-check"></i> ${log.correct_label}</span></td>
+                            <td>${date}</td>
+                            <td><i class="fa-solid fa-user-gear" style="font-size: 0.8rem; margin-right: 0.2rem; color: #a78bfa;"></i> ${log.corrected_by}</td>
+                        </tr>
+                    `;
+                    tbody.insertAdjacentHTML('beforeend', row);
+                });
+            } catch (err) {
+                console.error("Failed to load corrections list:", err);
+            }
+        }
+
+        // Submit Correction handler
+        if (btnSubmitCorrection) {
+            btnSubmitCorrection.addEventListener('click', async () => {
+                if (!activeResultData) return;
+
+                const correctLabel = correctLabelSelect.value;
+                const wrongPrediction = activeResultData.final_prediction;
+
+                if (correctLabel === getAnomalyShortName(wrongPrediction)) {
+                    alert("The correction label matches the current prediction verdict. Please select a different class.");
+                    return;
+                }
+
+                // Format raw_data sequence matching featureColumnsOrder
+                const sequence = activeResultData.raw_data.map(row => {
+                    return [
+                        row.VBat_Min_V || 0,
+                        row.VBat_Max_V || 0,
+                        row.Ah_Charge_Ah || 0,
+                        row.Ah_Load_Ah || 0,
+                        row.VPv_Max_V || 0,
+                        row.IPv_Max_A || 0,
+                        row.SOC_Pct || 0,
+                        row.Temp_Max_C || 0,
+                        row.Temp_Min_C || 0,
+                        row.Night_Min || 0
+                    ];
+                });
+
+                // Show loading
+                btnSubmitCorrection.setAttribute('disabled', true);
+                correctionSpinner.style.display = 'block';
+                correctionBtnIcon.style.display = 'none';
+
+                try {
+                    const response = await fetch('/api/correct', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            wrong_prediction: wrongPrediction,
+                            correct_label: correctLabel,
+                            sequence: sequence,
+                            learning_rate: 0.0001
+                        })
+                    });
+
+                    const data = await response.json();
+                    if (response.ok && data.success) {
+                        correctionSuccessMsg.textContent = `Correction applied! New version: v${data.model_version} (Loss: ${data.loss.toFixed(4)})`;
+                        correctionSuccessMsg.style.display = 'block';
+
+                        // Update version display
+                        loadModelVersion();
+
+                        // Refresh activeResultData and UI
+                        activeResultData.final_prediction = correctLabel;
+                        // Recalculate probabilities: force 100% on the corrected label for UI consistency
+                        activeResultData.confidence = 1.0;
+                        for (const key in activeResultData.probabilities) {
+                            activeResultData.probabilities[key] = (key === correctLabel) ? 1.0 : 0.0;
+                        }
+
+                        // Re-render dashboard with updated data
+                        renderDashboard(activeResultData);
+
+                        setTimeout(() => {
+                            correctionSuccessMsg.style.display = 'none';
+                        }, 5000);
+                    } else {
+                        alert(data.error || 'Failed to apply correction.');
+                    }
+                } catch (err) {
+                    console.error("Correction failed:", err);
+                    alert('Connection error while applying correction.');
+                } finally {
+                    btnSubmitCorrection.removeAttribute('disabled');
+                    correctionSpinner.style.display = 'none';
+                    correctionBtnIcon.style.display = 'block';
+                }
+            });
+        }
+
+        // Export Results to CSV
+        window.exportCSV = function () {
+            if (!activeResultData) return;
+
+            const data = activeResultData.raw_data;
+            const headers = Object.keys(data[0]);
+            const csvContent = [
+                headers.join(','),
+                ...data.map(row => headers.map(h => row[h]).join(','))
+            ].join('\n');
+
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.setAttribute('href', url);
+            a.setAttribute('download', `Analysis_${activeResultData.sample_id}.csv`);
+            a.click();
+        };
+
+        // Reset Analysis View
+        window.resetAnalysis = function () {
+            resultsContainer.style.display = 'none';
+            selectedFile = null;
+            fileInfo.innerHTML = 'Drag and drop your file here, or click to browse';
+            btnPredict.setAttribute('disabled', true);
+            activeResultData = null;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
     </script>
 </body>
 
